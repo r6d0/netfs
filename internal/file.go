@@ -195,7 +195,7 @@ func (serv *Server) _FileInfoHandle(writer http.ResponseWriter, request *http.Re
 					}
 
 					var data []byte
-					data, err = json.Marshal(RemoteFile{Host: *_LOCAL_HOST, Name: info.Name(), Path: path, Type: fileType, Size: uint64(info.Size())})
+					data, err = json.Marshal(RemoteFile{Host: serv._Host, Name: info.Name(), Path: path, Type: fileType, Size: uint64(info.Size())})
 					if err == nil {
 						writer.Write(data)
 					}
@@ -259,7 +259,7 @@ func (serv *Server) _FileCopyStartHandle(writer http.ResponseWriter, request *ht
 					prevName := source.Name
 					prevPath := source.Path
 					parent := filepath.Dir(source.Path)
-					task := _CopyTask{DB: serv.DB, Status: _CREATED}
+					task := _CopyTask{DB: serv._DB, Status: _CREATED}
 					err = filepath.WalkDir(source.Path, func(path string, entry fs.DirEntry, err error) error {
 						if strings.Contains(path, prevPath) {
 							prevName = entry.Name()
@@ -296,7 +296,7 @@ func (serv *Server) _FileCopyStartHandle(writer http.ResponseWriter, request *ht
 					err = task.Save()
 				} else {
 					id := []byte(_COPY_TASK + source.Path)
-					task := _CopyTask{DB: serv.DB, Id: id, Status: _CREATED, Source: source, Target: target}
+					task := _CopyTask{DB: serv._DB, Id: id, Status: _CREATED, Source: source, Target: target}
 					err = task.Save()
 				}
 			}
@@ -348,7 +348,7 @@ func (serv *Server) _ExecuteCopyTask() {
 
 		prefix := []byte(_COPY_TASK)
 		callback := make(chan _CopyTaskStatus)
-		count := serv.Config.TaskCount
+		count := serv._Config.TaskCount
 
 		for err == nil {
 			select {
@@ -358,7 +358,7 @@ func (serv *Server) _ExecuteCopyTask() {
 				fmt.Println("COPY COMPLETE")
 				count++
 			default:
-				err = serv.DB.View(func(txn *badger.Txn) error {
+				err = serv._DB.View(func(txn *badger.Txn) error {
 					var err error
 
 					it := txn.NewIterator(badger.DefaultIteratorOptions)
@@ -373,10 +373,10 @@ func (serv *Server) _ExecuteCopyTask() {
 							if err = json.Unmarshal(data, task); err == nil && task.Status <= _DELAYED {
 								fmt.Println(string(item.Key()))
 
-								task.DB = serv.DB
+								task.DB = serv._DB
 								task.Context = ctx
 								task.Callback = callback
-								task.BufferSize = serv.Config.BufferSize
+								task.BufferSize = serv._Config.BufferSize
 								task.Status = _RUNNING
 								task.Save()
 
@@ -389,5 +389,5 @@ func (serv *Server) _ExecuteCopyTask() {
 				})
 			}
 		}
-	}(serv.Context)
+	}(serv._Context)
 }

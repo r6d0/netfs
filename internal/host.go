@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/dgraph-io/badger/v4"
@@ -64,43 +65,17 @@ func (host *RemoteHost) GetFileInfo(path string) (*RemoteFile, error) {
 
 // HTTP server.
 type Server struct {
-	DB      *badger.DB
-	Config  Config
-	Context context.Context
-}
-
-// Start http requests listening.
-func (serv *Server) Listen() {
-	http.HandleFunc(_API.Host, serv._HostHandle)
-
-	http.HandleFunc(_API.FileInfo.URL, serv._FileInfoHandle)
-	http.HandleFunc(_API.FileCreate.URL, serv._FileCreateHandle)
-	http.HandleFunc(_API.FileWrite.URL, serv._FileWriteHandle)
-
-	http.HandleFunc(_API.FileCopyStart.URL, serv._FileCopyStartHandle)
-
-	// Execute async tasks
-	serv._ExecuteCopyTask()
-
-	// Run HTTP server
-	http.ListenAndServe(":8080", nil)
-}
-
-// Gets local IP address or error.
-func GetLocalIP() (net.IP, error) {
-	connection, err := net.Dial(_UDP, _UDP_HOST)
-	if connection != nil {
-		defer connection.Close()
-		return connection.LocalAddr().(*net.UDPAddr).IP, nil
-	}
-	return nil, err
+	_DB      *badger.DB
+	_Config  Config
+	_Context context.Context
+	_Host    RemoteHost
 }
 
 // Gets all IPs of local network or error.
-func GetLocalNetworkIPs() ([]net.IP, error) {
+func (serv *Server) GetLocalNetworkIPs() ([]net.IP, error) {
 	ips := []net.IP{}
 
-	local, err := GetLocalIP()
+	local, err := _GetLocalIP()
 	if err == nil {
 		localString := local.String()
 		parts := strings.Split(localString, _IP_SEPARATOR)
@@ -123,8 +98,9 @@ func GetLocalNetworkIPs() ([]net.IP, error) {
 }
 
 // Gets information about host by IP.
-func GetHost(ip net.IP) (*RemoteHost, error) {
-	res, err := http.Get("http://" + ip.String() + ":8080/do-sync/api/host") // TODO. Fix it
+func (serv *Server) GetHost(ip net.IP) (*RemoteHost, error) {
+	url := _GetURL(serv._Config.Server.Protocol, ip, int(serv._Config.Server.Port), _API.Host)
+	res, err := http.Get(url)
 	if err == nil {
 		defer res.Body.Close()
 
@@ -140,6 +116,38 @@ func GetHost(ip net.IP) (*RemoteHost, error) {
 	return nil, err
 }
 
+// Start requests listening. It's blocking current thread.
+func (serv *Server) Listen() {
+	http.HandleFunc(_API.Host, serv._HostHandle)
+
+	http.HandleFunc(_API.FileInfo.URL, serv._FileInfoHandle)
+	http.HandleFunc(_API.FileCreate.URL, serv._FileCreateHandle)
+	http.HandleFunc(_API.FileWrite.URL, serv._FileWriteHandle)
+
+	http.HandleFunc(_API.FileCopyStart.URL, serv._FileCopyStartHandle)
+
+	// Execute async tasks
+	serv._ExecuteCopyTask()
+
+	// Run HTTP server
+	http.ListenAndServe(_PORT_SEPARATOR+strconv.Itoa(int(serv._Config.Server.Port)), nil)
+}
+
+// New instance of the netfs server.
+func New(config Config) (*Server, error) {
+	// Database connection
+	db, err := badger.Open(badger.DefaultOptions(config.Database.Path))
+
+	// Information about server host
+	if err == nil {
+		var host *RemoteHost
+		if host, err = _GetLocalHost(config.Server.Protocol, int(config.Server.Port)); err == nil {
+			return &Server{_Config: config, _DB: db, _Host: *host, _Context: context.Background()}, nil
+		}
+	}
+	return nil, err
+}
+
 // -------------------------------------------------------- PRIVATE CODE --------------------------------------------------------
 
 const _CIDR_END = "1.0/24"
@@ -149,28 +157,67 @@ const _UDP_HOST = "1.1.1.1:80"
 const _PARAM_START = "?"
 const _PARAM_VALUE = "="
 const _PARAM_NEXT = "&"
+const _PROTOCOL_SEPARATOR = "://"
+const _PORT_SEPARATOR = ":"
 
-var _LOCAL_HOST = _GetLocalHost()
-
-// Gets information about localhost.
-func _GetLocalHost() *RemoteHost {
-	var ip net.IP
-	var hostname string
-	var err error
-
-	if ip, err = GetLocalIP(); err == nil {
-		if hostname, err = os.Hostname(); err == nil {
-			return &RemoteHost{Name: hostname, IP: ip}
-		}
+// Server API.
+var _API = struct {
+	// Information about file.
+	FileInfo struct {
+		URL    string
+		Method string
+		Path   string
 	}
-
-	panic(err.Error())
+	// Information about host.
+	Host string
+	// Create directory.
+	FileCreate struct {
+		URL         string
+		Method      string
+		ContentType string
+	}
+	// Write data to file.
+	FileWrite struct {
+		URL         string
+		Method      string
+		ContentType string
+		Path        string
+	}
+	// Starting a file or directory copy operation.
+	FileCopyStart struct {
+		URL         string
+		Method      string
+		ContentType string
+	}
+}{
+	Host: "/do-sync/api/host",
+	FileInfo: struct {
+		URL    string
+		Method string
+		Path   string
+	}{URL: "/do-sync/api/file/info", Method: http.MethodGet, Path: "path"},
+	FileCreate: struct {
+		URL         string
+		Method      string
+		ContentType string
+	}{URL: "/do-sync/api/file/create", Method: http.MethodPost, ContentType: "application/octet-stream"},
+	FileWrite: struct {
+		URL         string
+		Method      string
+		ContentType string
+		Path        string
+	}{URL: "/do-sync/api/file/write", Method: http.MethodPost, Path: "path", ContentType: "application/octet-stream"},
+	FileCopyStart: struct {
+		URL         string
+		Method      string
+		ContentType string
+	}{URL: "/do-sync/api/file/copy/start", Method: http.MethodPost, ContentType: "application/octet-stream"},
 }
 
 // Returns information about the current host.
 func (serv *Server) _HostHandle(writer http.ResponseWriter, request *http.Request) {
 	if request.Method == http.MethodGet {
-		data, err := json.Marshal(_LOCAL_HOST)
+		data, err := json.Marshal(serv._Host)
 		if err == nil {
 			_, err = writer.Write(data)
 		}
@@ -184,4 +231,56 @@ func (serv *Server) _HostHandle(writer http.ResponseWriter, request *http.Reques
 	} else {
 		writer.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+// Gets local IP address or error.
+func _GetLocalIP() (net.IP, error) {
+	connection, err := net.Dial(_UDP, _UDP_HOST)
+	if connection != nil {
+		defer connection.Close()
+		return connection.LocalAddr().(*net.UDPAddr).IP, nil
+	}
+	return nil, err
+}
+
+// Gets information about localhost.
+func _GetLocalHost(protocol string, port int) (*RemoteHost, error) {
+	var ip net.IP
+	var hostname string
+	var err error
+
+	if ip, err = _GetLocalIP(); err == nil {
+		if hostname, err = os.Hostname(); err == nil {
+			return &RemoteHost{Name: hostname, IP: ip, URL: _GetURL(strings.ToLower(protocol), ip, port, "")}, nil
+		}
+	}
+	return nil, err
+}
+
+// Gets host url in format - [protocol]://[ip]:[port]/
+func _GetURL(protocol string, ip net.IP, port int, path string, params ...any) string {
+	buffer := strings.Builder{}
+	buffer.WriteString(strings.ToLower(protocol))
+	buffer.WriteString(_PROTOCOL_SEPARATOR)
+	buffer.WriteString(ip.String())
+	buffer.WriteString(_PORT_SEPARATOR)
+	buffer.WriteString(strconv.Itoa(port))
+
+	if len(path) > 0 {
+		buffer.WriteString(path)
+	}
+
+	if len(params) > 0 {
+		buffer.WriteString(_PARAM_START)
+		for index := range params {
+			buffer.WriteString(fmt.Sprint(params[index]))
+			buffer.WriteString(_PARAM_VALUE)
+			buffer.WriteString(fmt.Sprint(params[index+1]))
+
+			if index < len(params)-1 {
+				buffer.WriteString(_PARAM_NEXT)
+			}
+		}
+	}
+	return buffer.String()
 }

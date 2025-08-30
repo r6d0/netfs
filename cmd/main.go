@@ -2,19 +2,46 @@ package main
 
 import (
 	"fmt"
-	"net/http"
 	_ "net/http/pprof"
 	netfs "netfs/internal"
+	"netfs/internal/console"
+	"os"
 )
 
-func main() {
-	go func() {
-		fmt.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
+const NAME_INDEX = 1
 
-	server, err := netfs.New(netfs.Config{BufferSize: 100 * 1024 * 1024, TaskCount: 10, Server: netfs.ServerConfig{Port: 49153, Protocol: "http"}, Database: netfs.DatabaseConfig{Path: "./tmp"}})
-	if err == nil {
-		server.Listen()
+func main() {
+	var name string
+	var err error
+
+	if len(os.Args) > NAME_INDEX {
+		name = os.Args[NAME_INDEX]
+
+		// Prepare configuration.
+		var config netfs.Config
+		if config, err = netfs.NewConfig(); err == nil {
+			// Prepare console client.
+			var client *console.ConsoleClient
+			if client, err = console.NewConsoleClient(config); err == nil {
+				// Execute command.
+				var command console.ConsoleCommand
+				if command, err = client.GetCommand(name); err == nil {
+					var res string
+					if res, err = command.Execute(os.Args[NAME_INDEX:]...); len(res) > 0 {
+						fmt.Print(res)
+					}
+				}
+			}
+		}
+	} else {
+		err = console.NeedHelpError
 	}
-	panic(err.Error())
+
+	if err == console.NeedHelpError || err == console.CommandNotFoundError {
+		if help, _ := console.HelpCommand.Execute(name); len(help) > 0 {
+			fmt.Print(help)
+		}
+	} else if err != nil {
+		panic(err.Error())
+	}
 }

@@ -1,5 +1,18 @@
 package netfs
 
+// Server configuration
+type ServerConfig struct {
+	// The server port
+	Port uint16 `json:"port"`
+	// The server protocol. HTTP only.
+	Protocol string `json:"protocol"`
+}
+
+// Database configuration.
+type DatabaseConfig struct {
+	Path string `json:"path"`
+}
+
 // netfs configuration.
 type Config struct {
 	// Server configuration.
@@ -12,15 +25,6 @@ type Config struct {
 	TaskCount uint64
 }
 
-// Server configuration
-type ServerConfig struct {
-	// The server port
-	Port uint16 `json:"port"`
-	// The server protocol. HTTP only.
-	Protocol string `json:"protocol"`
-}
-
-// Database configuration.
-type DatabaseConfig struct {
-	Path string `json:"path"`
+func NewConfig() (Config, error) {
+	return Config{}, nil
 }

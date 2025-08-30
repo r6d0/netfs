@@ -63,43 +63,36 @@ func (host *RemoteHost) GetFileInfo(path string) (*RemoteFile, error) {
 	return nil, err
 }
 
-// HTTP server.
-type Server struct {
-	_DB      *badger.DB
-	_Config  Config
-	_Context context.Context
-	_Host    RemoteHost
+type Network struct {
+	_Config Config
 }
 
-// Gets all IPs of local network or error.
-func (serv *Server) GetLocalNetworkIPs() ([]net.IP, error) {
-	ips := []net.IP{}
+// Get information about available hosts.
+func (network *Network) GetHosts() ([]RemoteHost, error) {
+	var hosts []RemoteHost
 
-	local, err := _GetLocalIP()
+	ips, err := _GetLocalNetworkIPs()
 	if err == nil {
-		localString := local.String()
-		parts := strings.Split(localString, _IP_SEPARATOR)
-		cidr := strings.Join([]string{parts[0], parts[1], _CIDR_END}, _IP_SEPARATOR)
+		callback := make(chan *RemoteHost)
+		for _, ip := range ips {
+			go func(ip net.IP, callback chan *RemoteHost) {
+				host, _ := network.GetHost(ip)
+				callback <- host
+			}(ip, callback)
+		}
 
-		var prefix netip.Prefix
-		if prefix, err = netip.ParsePrefix(cidr); err == nil {
-			prefix = prefix.Masked()
-			addr := prefix.Addr()
-			for prefix.Contains(addr) {
-				ip := addr.String()
-				if localString != "" {
-					ips = append(ips, net.ParseIP(ip))
-				}
-				addr = addr.Next()
+		for range ips {
+			if host := <-callback; host != nil {
+				hosts = append(hosts, *host)
 			}
 		}
 	}
-	return ips, err
+	return hosts, err
 }
 
 // Gets information about host by IP.
-func (serv *Server) GetHost(ip net.IP) (*RemoteHost, error) {
-	url := _GetURL(serv._Config.Server.Protocol, ip, int(serv._Config.Server.Port), _API.Host)
+func (network *Network) GetHost(ip net.IP) (*RemoteHost, error) {
+	url := _GetURL(network._Config.Server.Protocol, ip, int(network._Config.Server.Port), _API.Host)
 	res, err := http.Get(url)
 	if err == nil {
 		defer res.Body.Close()
@@ -114,6 +107,18 @@ func (serv *Server) GetHost(ip net.IP) (*RemoteHost, error) {
 		}
 	}
 	return nil, err
+}
+
+func NewNetwork(config Config) (*Network, error) {
+	return nil, nil
+}
+
+// HTTP server.
+type Server struct {
+	_DB      *badger.DB
+	_Config  Config
+	_Context context.Context
+	_Host    RemoteHost
 }
 
 // Start requests listening. It's blocking current thread.
@@ -255,6 +260,32 @@ func _GetLocalHost(protocol string, port int) (*RemoteHost, error) {
 		}
 	}
 	return nil, err
+}
+
+// Gets all IPs of local network or error.
+func _GetLocalNetworkIPs() ([]net.IP, error) {
+	ips := []net.IP{}
+
+	local, err := _GetLocalIP()
+	if err == nil {
+		localString := local.String()
+		parts := strings.Split(localString, _IP_SEPARATOR)
+		cidr := strings.Join([]string{parts[0], parts[1], _CIDR_END}, _IP_SEPARATOR)
+
+		var prefix netip.Prefix
+		if prefix, err = netip.ParsePrefix(cidr); err == nil {
+			prefix = prefix.Masked()
+			addr := prefix.Addr()
+			for prefix.Contains(addr) {
+				ip := addr.String()
+				if localString != "" {
+					ips = append(ips, net.ParseIP(ip))
+				}
+				addr = addr.Next()
+			}
+		}
+	}
+	return ips, err
 }
 
 // Gets host url in format - [protocol]://[ip]:[port]/

@@ -1,7 +1,6 @@
 package netfs
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,8 +10,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	"github.com/dgraph-io/badger/v4"
 )
 
 // -------------------------------------------------------- PUBLIC CODE ---------------------------------------------------------
@@ -63,96 +60,6 @@ func (host *RemoteHost) GetFileInfo(path string) (*RemoteFile, error) {
 	return nil, err
 }
 
-type Network struct {
-	_Config Config
-}
-
-// Get information about available hosts.
-func (network *Network) GetHosts() ([]RemoteHost, error) {
-	var hosts []RemoteHost
-
-	ips, err := _GetLocalNetworkIPs()
-	if err == nil {
-		callback := make(chan *RemoteHost)
-		for _, ip := range ips {
-			go func(ip net.IP, callback chan *RemoteHost) {
-				host, _ := network.GetHost(ip)
-				callback <- host
-			}(ip, callback)
-		}
-
-		for range ips {
-			if host := <-callback; host != nil {
-				hosts = append(hosts, *host)
-			}
-		}
-	}
-	return hosts, err
-}
-
-// Gets information about host by IP.
-func (network *Network) GetHost(ip net.IP) (*RemoteHost, error) {
-	url := _GetURL(network._Config.Server.Protocol, ip, int(network._Config.Server.Port), _API.Host)
-	res, err := http.Get(url)
-	if err == nil {
-		defer res.Body.Close()
-
-		var data []byte
-		if data, err = io.ReadAll(res.Body); err == nil {
-			var host *RemoteHost = &RemoteHost{}
-
-			if err = json.Unmarshal(data, host); err == nil {
-				return host, nil
-			}
-		}
-	}
-	return nil, err
-}
-
-func NewNetwork(config Config) (*Network, error) {
-	return nil, nil
-}
-
-// HTTP server.
-type Server struct {
-	_DB      *badger.DB
-	_Config  Config
-	_Context context.Context
-	_Host    RemoteHost
-}
-
-// Start requests listening. It's blocking current thread.
-func (serv *Server) Listen() {
-	http.HandleFunc(_API.Host, serv._HostHandle)
-
-	http.HandleFunc(_API.FileInfo.URL, serv._FileInfoHandle)
-	http.HandleFunc(_API.FileCreate.URL, serv._FileCreateHandle)
-	http.HandleFunc(_API.FileWrite.URL, serv._FileWriteHandle)
-
-	http.HandleFunc(_API.FileCopyStart.URL, serv._FileCopyStartHandle)
-
-	// Execute async tasks
-	serv._ExecuteCopyTask()
-
-	// Run HTTP server
-	http.ListenAndServe(_PORT_SEPARATOR+strconv.Itoa(int(serv._Config.Server.Port)), nil)
-}
-
-// New instance of the netfs server.
-func New(config Config) (*Server, error) {
-	// Database connection
-	db, err := badger.Open(badger.DefaultOptions(config.Database.Path))
-
-	// Information about server host
-	if err == nil {
-		var host *RemoteHost
-		if host, err = _GetLocalHost(config.Server.Protocol, int(config.Server.Port)); err == nil {
-			return &Server{_Config: config, _DB: db, _Host: *host, _Context: context.Background()}, nil
-		}
-	}
-	return nil, err
-}
-
 // -------------------------------------------------------- PRIVATE CODE --------------------------------------------------------
 
 const _CIDR_END = "1.0/24"
@@ -164,60 +71,6 @@ const _PARAM_VALUE = "="
 const _PARAM_NEXT = "&"
 const _PROTOCOL_SEPARATOR = "://"
 const _PORT_SEPARATOR = ":"
-
-// Server API.
-var _API = struct {
-	// Information about file.
-	FileInfo struct {
-		URL    string
-		Method string
-		Path   string
-	}
-	// Information about host.
-	Host string
-	// Create directory.
-	FileCreate struct {
-		URL         string
-		Method      string
-		ContentType string
-	}
-	// Write data to file.
-	FileWrite struct {
-		URL         string
-		Method      string
-		ContentType string
-		Path        string
-	}
-	// Starting a file or directory copy operation.
-	FileCopyStart struct {
-		URL         string
-		Method      string
-		ContentType string
-	}
-}{
-	Host: "/do-sync/api/host",
-	FileInfo: struct {
-		URL    string
-		Method string
-		Path   string
-	}{URL: "/do-sync/api/file/info", Method: http.MethodGet, Path: "path"},
-	FileCreate: struct {
-		URL         string
-		Method      string
-		ContentType string
-	}{URL: "/do-sync/api/file/create", Method: http.MethodPost, ContentType: "application/octet-stream"},
-	FileWrite: struct {
-		URL         string
-		Method      string
-		ContentType string
-		Path        string
-	}{URL: "/do-sync/api/file/write", Method: http.MethodPost, Path: "path", ContentType: "application/octet-stream"},
-	FileCopyStart: struct {
-		URL         string
-		Method      string
-		ContentType string
-	}{URL: "/do-sync/api/file/copy/start", Method: http.MethodPost, ContentType: "application/octet-stream"},
-}
 
 // Returns information about the current host.
 func (serv *Server) _HostHandle(writer http.ResponseWriter, request *http.Request) {

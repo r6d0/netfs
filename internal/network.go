@@ -9,7 +9,7 @@ import (
 
 // Network operations.
 type Network struct {
-	_Config Config
+	_Config *Config
 }
 
 // Get information about available hosts.
@@ -55,6 +55,6 @@ func (network *Network) GetHost(ip net.IP) (*RemoteHost, error) {
 }
 
 // Creates a new instance of Network, returns an error if creation failed.
-func NewNetwork(config Config) (*Network, error) {
+func NewNetwork(config *Config) (*Network, error) {
 	return &Network{_Config: config}, nil
 }

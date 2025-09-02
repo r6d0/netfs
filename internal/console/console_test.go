@@ -8,7 +8,8 @@ import (
 )
 
 func TestGetCommandNotFound(t *testing.T) {
-	client, _ := console.NewConsoleClient(netfs.Config{})
+	config, _ := netfs.NewConfig()
+	client, _ := console.NewConsoleClient(config)
 	command, err := client.GetCommand("not found command name")
 	if err != console.CommandNotFoundError {
 		t.Fatalf("error should be [console.CommandNotFoundError], but error is [%s]", err)
@@ -20,7 +21,8 @@ func TestGetCommandNotFound(t *testing.T) {
 }
 
 func TestGetCommand(t *testing.T) {
-	client, _ := console.NewConsoleClient(netfs.Config{})
+	config, _ := netfs.NewConfig()
+	client, _ := console.NewConsoleClient(config)
 	command, err := client.GetCommand(console.HelpCommand.GetName())
 	if err != nil {
 		t.Fatalf("error should be nil, but error is [%s]", err)

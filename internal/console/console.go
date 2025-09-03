@@ -11,9 +11,7 @@ import (
 
 var NeedHelpError = errors.New("help")
 var CommandNotFoundError = errors.New("command not found")
-
-// The command shows instructions for the console client.
-var HelpCommand = _HelpConsoleCommand{}
+var NoAvailableHosts = errors.New("No available hosts")
 
 // Abstraction of console command.
 type ConsoleCommand interface {
@@ -43,11 +41,11 @@ func (client *ConsoleClient) GetCommand(name string) (ConsoleCommand, error) {
 
 // Creates a new instance of ConsoleClient, returns an error if creation failed.
 func NewConsoleClient(config *netfs.Config) (*ConsoleClient, error) {
-	_, err := netfs.NewNetwork(config)
+	network, err := netfs.NewNetwork(config)
 	if err == nil {
 		client := &ConsoleClient{}
 		client._Config = config
-		client._Commands = []ConsoleCommand{HelpCommand}
+		client._Commands = []ConsoleCommand{_HelpConsoleCommand{_Client: client}, _HostsConsoleCommand{_Network: network}}
 
 		return client, nil
 	}
@@ -56,8 +54,50 @@ func NewConsoleClient(config *netfs.Config) (*ConsoleClient, error) {
 
 // -------------------------------------------------------- PRIVATE CODE --------------------------------------------------------
 
+// The command shows all available hosts.
+type _HostsConsoleCommand struct {
+	_Network *netfs.Network
+}
+
+// Returns the command name.
+func (cmd _HostsConsoleCommand) GetName() string {
+	return "hosts"
+}
+
+// Returns information about command.
+func (cmd _HostsConsoleCommand) GetDescription() string {
+	return strings.Join(
+		[]string{
+			"hosts       - The command shows all available hosts.",
+			"Examples:",
+			"netfs hosts - The command shows all available hosts.",
+		},
+		fmt.Sprintln(),
+	)
+}
+
+// Executes a command with arguments.
+func (cmd _HostsConsoleCommand) Execute(args ...string) (string, error) {
+	hosts, err := cmd._Network.GetHosts()
+	if err == nil {
+		if len(hosts) > 0 {
+			buffer := strings.Builder{}
+			for _, host := range hosts {
+				buffer.WriteString(host.Name)
+				buffer.WriteString(" ")
+				buffer.WriteString(fmt.Sprintln(host.IP.String()))
+			}
+			return buffer.String(), nil
+		}
+		return "", NoAvailableHosts
+	}
+	return "", err
+}
+
 // The command shows instructions for the console client.
-type _HelpConsoleCommand struct{}
+type _HelpConsoleCommand struct {
+	_Client *ConsoleClient
+}
 
 // Returns the command name.
 func (cmd _HelpConsoleCommand) GetName() string {
@@ -83,8 +123,17 @@ func (cmd _HelpConsoleCommand) Execute(args ...string) (string, error) {
 		if args[0] == cmd.GetName() {
 			return cmd.GetDescription(), nil
 		} else {
-			// TODO. Find the command and show information about it
+			for _, command := range cmd._Client._Commands {
+				if args[0] == command.GetName() {
+					return command.GetDescription(), nil
+				}
+			}
 		}
 	}
-	return "", nil
+
+	buffer := strings.Builder{}
+	for _, command := range cmd._Client._Commands {
+		buffer.WriteString(command.GetDescription())
+	}
+	return buffer.String(), nil
 }

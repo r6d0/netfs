@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"time"
 )
 
 // -------------------------------------------------------- PUBLIC CODE ---------------------------------------------------------
@@ -16,6 +17,12 @@ type ServerConfig struct {
 	Protocol string `json:"protocol"`
 }
 
+// Client configuration.
+type ClientConfig struct {
+	// Request timeout. By default is "1 second"
+	Timeout time.Duration
+}
+
 // Database configuration.
 type DatabaseConfig struct {
 	Path string `json:"path"`
@@ -25,6 +32,8 @@ type DatabaseConfig struct {
 type Config struct {
 	// Server configuration.
 	Server ServerConfig `json:"server"`
+	// Client configuration.
+	Client ClientConfig `json:"client"`
 	// Database configuration.
 	Database DatabaseConfig `json:"database"`
 	// The size of the data transfer buffer.
@@ -37,6 +46,7 @@ type Config struct {
 func NewConfig(paths ...string) (*Config, error) {
 	config := Config{
 		Server:     ServerConfig{Port: _DEFAULT_PORT, Protocol: _DEFAULT_PROTOCOL},
+		Client:     ClientConfig{Timeout: _DEFAULT_TIMEOUT_SEC * time.Second},
 		Database:   DatabaseConfig{Path: _DEFAULT_DATABASE_PATH},
 		BufferSize: _DEFAULT_BUFFER_SIZE,
 		TaskCount:  _DEFAULT_TASKS_COUNT,
@@ -71,3 +81,4 @@ const _DEFAULT_PROTOCOL = "http"
 const _DEFAULT_DATABASE_PATH = "./data"
 const _DEFAULT_BUFFER_SIZE = 1024 * 1024 // 1MB
 const _DEFAULT_TASKS_COUNT = 10
+const _DEFAULT_TIMEOUT_SEC = 1

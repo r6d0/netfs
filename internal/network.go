@@ -10,6 +10,7 @@ import (
 // Network operations.
 type Network struct {
 	_Config *Config
+	_Client *http.Client
 }
 
 // Get information about available hosts.
@@ -38,13 +39,13 @@ func (network *Network) GetHosts() ([]RemoteHost, error) {
 // Gets information about host by IP.
 func (network *Network) GetHost(ip net.IP) (*RemoteHost, error) {
 	url := _GetURL(network._Config.Server.Protocol, ip, int(network._Config.Server.Port), _API.Host)
-	res, err := http.Get(url)
+	res, err := network._Client.Get(url)
 	if err == nil {
 		defer res.Body.Close()
 
 		var data []byte
 		if data, err = io.ReadAll(res.Body); err == nil {
-			var host *RemoteHost = &RemoteHost{}
+			var host *RemoteHost = &RemoteHost{_Client: network._Client}
 
 			if err = json.Unmarshal(data, host); err == nil {
 				return host, nil
@@ -56,5 +57,5 @@ func (network *Network) GetHost(ip net.IP) (*RemoteHost, error) {
 
 // Creates a new instance of Network, returns an error if creation failed.
 func NewNetwork(config *Config) (*Network, error) {
-	return &Network{_Config: config}, nil
+	return &Network{_Config: config, _Client: &http.Client{Timeout: config.Client.Timeout}}, nil
 }

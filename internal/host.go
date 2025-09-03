@@ -16,9 +16,10 @@ import (
 
 // Information about host.
 type RemoteHost struct {
-	Name string
-	IP   net.IP
-	URL  string
+	Name    string
+	IP      net.IP
+	URL     string
+	_Client *http.Client
 }
 
 // Gets host url in format - [protocol]://[ip]:[port]/
@@ -44,13 +45,13 @@ func (host *RemoteHost) GetURL(path string, params ...any) string {
 
 // Gets information about file by path.
 func (host *RemoteHost) GetFileInfo(path string) (*RemoteFile, error) {
-	res, err := http.Get(host.GetURL(_API.FileInfo.URL, _API.FileInfo.Path, path))
+	res, err := host._Client.Get(host.GetURL(_API.FileInfo.URL, _API.FileInfo.Path, path))
 	if err == nil {
 		defer res.Body.Close()
 
 		var data []byte
 		if data, err = io.ReadAll(res.Body); err == nil {
-			var file *RemoteFile = &RemoteFile{}
+			var file *RemoteFile = &RemoteFile{_Client: host._Client}
 
 			if err = json.Unmarshal(data, file); err == nil {
 				return file, nil

@@ -2,6 +2,7 @@ package netfs_test
 
 import (
 	netfs "netfs/internal"
+	"os"
 	"testing"
 	"time"
 )
@@ -27,4 +28,6 @@ func TestStart(t *testing.T) {
 		server.Stop()
 	}()
 	server.Start()
+
+	defer os.RemoveAll(config.Database.Path)
 }

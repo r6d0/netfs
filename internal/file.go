@@ -28,11 +28,12 @@ const (
 
 // Information about file.
 type RemoteFile struct {
-	Host RemoteHost
-	Name string
-	Path string
-	Type RemoteFileType
-	Size uint64
+	Host    RemoteHost
+	Name    string
+	Path    string
+	Type    RemoteFileType
+	Size    uint64
+	_Client *http.Client
 }
 
 // Copies file to target.
@@ -40,7 +41,7 @@ func (file *RemoteFile) CopyTo(target *RemoteFile) error {
 	data, err := json.Marshal([]RemoteFile{*file, *target})
 	if err == nil {
 		host := target.Host
-		_, err = http.Post(host.GetURL(_API.FileCopyStart.URL), _API.FileCopyStart.ContentType, bytes.NewReader(data))
+		_, err = file._Client.Post(host.GetURL(_API.FileCopyStart.URL), _API.FileCopyStart.ContentType, bytes.NewReader(data))
 	}
 	return err
 }

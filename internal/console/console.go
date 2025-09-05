@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	netfs "netfs/internal"
+	"strconv"
 	"strings"
 )
 
@@ -25,8 +26,9 @@ type ConsoleCommand interface {
 
 // A client for interacting with netfs via the console.
 type ConsoleClient struct {
-	_Commands []ConsoleCommand
 	_Config   *netfs.Config
+	_Network  *netfs.Network
+	_Commands []ConsoleCommand
 }
 
 // Returns the command by name and returns an error if the command is not found.
@@ -45,7 +47,12 @@ func NewConsoleClient(config *netfs.Config) (*ConsoleClient, error) {
 	if err == nil {
 		client := &ConsoleClient{}
 		client._Config = config
-		client._Commands = []ConsoleCommand{_HelpConsoleCommand{_Client: client}, _HostsConsoleCommand{_Network: network}}
+		client._Network = network
+		client._Commands = []ConsoleCommand{
+			_HelpConsoleCommand{_Client: client},
+			_HostsConsoleCommand{_Client: client},
+			_FileInfoConsoleCommand{_Client: client},
+		}
 
 		return client, nil
 	}
@@ -54,9 +61,70 @@ func NewConsoleClient(config *netfs.Config) (*ConsoleClient, error) {
 
 // -------------------------------------------------------- PRIVATE CODE --------------------------------------------------------
 
+const PATH_SEPARATOR = "/"
+const PATH_SIZE = 2
+
+// The command shows information about file on remote host.
+type _FileInfoConsoleCommand struct {
+	_Client *ConsoleClient
+}
+
+// Returns the command name.
+func (cmd _FileInfoConsoleCommand) GetName() string {
+	return "file"
+}
+
+// Returns information about command.
+func (cmd _FileInfoConsoleCommand) GetDescription() string {
+	return strings.Join(
+		[]string{
+			"file host/file.txt              - shows information about file on remote host.",
+			"Examples:",
+			"netfs file 192.51.12.1/file.txt - shows information about file on remote host.",
+			"netfs file myhostname/file.txt  - shows information about file on remote host.",
+		},
+		fmt.Sprintln(),
+	)
+}
+
+// Executes a command with arguments.
+func (cmd _FileInfoConsoleCommand) Execute(args ...string) (string, error) {
+	err := NeedHelpError
+
+	if len(args) > 0 {
+		path := strings.SplitN(args[0], PATH_SEPARATOR, PATH_SIZE)
+		if len(path) == PATH_SIZE {
+			var hosts []netfs.RemoteHost
+			if hosts, err = cmd._Client._Network.GetHosts(); err == nil {
+				for _, host := range hosts {
+					if path[0] == host.Name || path[0] == host.IP.String() {
+						var file *netfs.RemoteFile
+						if file, err = host.GetFileInfo(path[1]); err == nil {
+							buffer := strings.Builder{}
+							buffer.WriteString(file.Host.Name)
+							buffer.WriteString(" ")
+							buffer.WriteString(file.Path)
+							buffer.WriteString(" ")
+							buffer.WriteString(strconv.Itoa(int(file.Size)))
+							buffer.WriteString(" ")
+							buffer.WriteString(strconv.Itoa(int(file.Type)))
+
+							return buffer.String(), nil
+						} else {
+							return "", err
+						}
+					}
+				}
+				err = NoAvailableHosts // TODO. Change error
+			}
+		}
+	}
+	return "", err
+}
+
 // The command shows all available hosts.
 type _HostsConsoleCommand struct {
-	_Network *netfs.Network
+	_Client *ConsoleClient
 }
 
 // Returns the command name.
@@ -78,7 +146,7 @@ func (cmd _HostsConsoleCommand) GetDescription() string {
 
 // Executes a command with arguments.
 func (cmd _HostsConsoleCommand) Execute(args ...string) (string, error) {
-	hosts, err := cmd._Network.GetHosts()
+	hosts, err := cmd._Client._Network.GetHosts()
 	if err == nil {
 		if len(hosts) > 0 {
 			buffer := strings.Builder{}

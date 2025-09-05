@@ -30,11 +30,14 @@ func (host *RemoteHost) GetURL(path string, params ...any) string {
 
 	if len(params) > 0 {
 		builder.WriteString(_PARAM_START)
-		for index := range params {
+
+		index := 0
+		for index < len(params)-1 {
 			builder.WriteString(fmt.Sprint(params[index]))
 			builder.WriteString(_PARAM_VALUE)
 			builder.WriteString(fmt.Sprint(params[index+1]))
 
+			index++
 			if index < len(params)-1 {
 				builder.WriteString(_PARAM_NEXT)
 			}

@@ -18,7 +18,7 @@ func main() {
 		name = os.Args[NAME_INDEX]
 
 		// Prepare configuration.
-		var config netfs.Config
+		var config *netfs.Config
 		if config, err = netfs.NewConfig(); err == nil {
 			// Prepare console client.
 			var client *console.ConsoleClient
@@ -38,9 +38,9 @@ func main() {
 	}
 
 	if err == console.NeedHelpError || err == console.CommandNotFoundError {
-		if help, _ := console.HelpCommand.Execute(name); len(help) > 0 {
-			fmt.Print(help)
-		}
+		// if help, _ := console.GetCommand("help").Execute(name); len(help) > 0 {
+		// 	fmt.Print(help)
+		// }
 	} else if err != nil {
 		panic(err.Error())
 	}

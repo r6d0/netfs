@@ -63,16 +63,16 @@ const (
 
 // Asynchronous task for files copying.
 type _CopyTask struct {
-	_DB         *badger.DB           `json:"-"`
-	_Context    context.Context      `json:"-"`
-	_Callback   chan _CopyTaskStatus `json:"-"`
-	_BufferSize uint64               `json:"-"`
-	_Id         []byte
-	_Offset     uint64
-	_Status     _CopyTaskStatus
-	_Source     RemoteFile
-	_Target     RemoteFile
-	_Error      string
+	_DB         *badger.DB
+	_Context    context.Context
+	_Callback   chan _CopyTaskStatus
+	_BufferSize uint64
+	Id          []byte
+	Offset      uint64
+	Status      _CopyTaskStatus
+	Source      RemoteFile
+	Target      RemoteFile
+	Error       string
 }
 
 // Saves task to database.
@@ -80,7 +80,7 @@ func (task *_CopyTask) Save() error {
 	return task._DB.Update(func(txn *badger.Txn) error {
 		data, err := json.Marshal(*task)
 		if err == nil {
-			txn.Set(task._Id, data)
+			err = txn.Set(task.Id, data)
 		}
 		return err
 	})
@@ -89,7 +89,7 @@ func (task *_CopyTask) Save() error {
 // Starts the copying process.
 func (task *_CopyTask) Process() {
 	var err error
-	switch task._Source.Type {
+	switch task.Source.Type {
 	// Copy directory
 	case DIRECTORY:
 		err = task.ProcessDirectory()
@@ -97,7 +97,7 @@ func (task *_CopyTask) Process() {
 	case FILE:
 		err = task.ProcessFile()
 	}
-	task._Callback <- task._Status
+	task._Callback <- task.Status
 
 	fmt.Println("ERROR: ", err)
 }
@@ -106,77 +106,68 @@ func (task *_CopyTask) Process() {
 func (task *_CopyTask) ProcessDirectory() error {
 	var err error
 	var data []byte
-	if data, err = json.Marshal(task._Target); err == nil {
-		host := task._Target.Host
+	if data, err = json.Marshal(task.Target); err == nil {
+		host := task.Target.Host
 		_, err = http.Post(host.GetURL(_API.FileCreate.URL), _API.FileCreate.ContentType, bytes.NewReader(data))
 		if err != nil {
-			task._Status = _DELAYED
-			task._Error = err.Error()
-			err = task.Save()
+			task.Status = _DELAYED
+			task.Error = err.Error()
 		}
 	} else {
-		task._Status = _FAILED
-		task._Error = err.Error()
-		err = task.Save()
+		task.Status = _FAILED
+		task.Error = err.Error()
 	}
 
 	if err == nil {
-		task._Status = _COMPLETED
-		err = task.Save()
+		task.Status = _COMPLETED
 	}
-	return err
+	return errors.Join(err, task.Save())
 }
 
 // Copy file to remote host.
 func (task *_CopyTask) ProcessFile() error {
-	file, err := os.Open(task._Source.Path)
+	file, err := os.Open(task.Source.Path)
 	if err != nil {
-		task._Status = _FAILED
-		task._Error = err.Error()
-		err = task.Save()
+		task.Status = _FAILED
+		task.Error = err.Error()
 	} else {
 		defer file.Close()
-	}
 
-	var info os.FileInfo
-	if info, err = file.Stat(); err == nil {
-		url := task._Target.Host.GetURL(_API.FileWrite.URL, _API.FileWrite.Path, task._Target.Path)
-		buffer := make([]byte, min(uint64(info.Size()), task._BufferSize))
+		var info os.FileInfo
+		if info, err = file.Stat(); err == nil {
+			url := task.Target.Host.GetURL(_API.FileWrite.URL, _API.FileWrite.Path, task.Target.Path)
+			buffer := make([]byte, min(uint64(info.Size()), task._BufferSize))
 
-		size := 0
-		for task._Status == _RUNNING {
-			select {
-			case <-task._Context.Done():
-				task._Status = _DELAYED
-				task.Save()
-			default:
-				if size, err = file.Read(buffer); err == nil {
-					_, err = http.Post(url, _API.FileWrite.ContentType, bytes.NewReader(buffer[:size]))
-					switch err {
-					case nil:
-						task._Offset += uint64(size)
-						err = task.Save()
-					case io.EOF:
-						task._Status = _COMPLETED
-						err = task.Save()
-					default:
-						task._Status = _DELAYED
-						task._Error = err.Error()
-						err = task.Save()
+			size := 0
+			for task.Status == _RUNNING {
+				select {
+				case <-task._Context.Done(): // canceled
+					task.Status = _DELAYED
+					task.Save()
+				default: // in progress
+					if size, err = file.Read(buffer); err == nil {
+						if _, err = http.Post(url, _API.FileWrite.ContentType, bytes.NewReader(buffer[:size])); err == nil {
+							task.Offset += uint64(size)
+						} else {
+							task.Status = _DELAYED
+							task.Error = err.Error()
+						}
+					} else if errors.Is(err, io.EOF) {
+						err = nil
+						task.Status = _COMPLETED
+					} else {
+						task.Status = _FAILED
+						task.Error = err.Error()
 					}
-				} else {
-					task._Status = _FAILED
-					task._Error = err.Error()
-					err = task.Save()
+					err = errors.Join(err, task.Save())
 				}
 			}
+		} else {
+			task.Status = _FAILED
+			task.Error = err.Error()
 		}
-	} else {
-		task._Status = _FAILED
-		task._Error = err.Error()
-		err = task.Save()
 	}
-	return err
+	return errors.Join(err, task.Save())
 }
 
 // Returns information about file or directory.
@@ -217,6 +208,7 @@ func (serv *Server) _FileInfoHandle(writer http.ResponseWriter, request *http.Re
 
 // Writes the received data to file.
 func (serv *Server) _FileWriteHandle(writer http.ResponseWriter, request *http.Request) {
+	fmt.Println("_FileWriteHandle")
 	if request.Method == _API.FileWrite.Method {
 		query := request.URL.Query()
 		if path := query.Get(_API.FileWrite.Path); path != "" {
@@ -260,7 +252,7 @@ func (serv *Server) _FileCopyStartHandle(writer http.ResponseWriter, request *ht
 					prevName := source.Name
 					prevPath := source.Path
 					parent := filepath.Dir(source.Path)
-					task := _CopyTask{_DB: serv._DB, _Status: _CREATED}
+					task := _CopyTask{_DB: serv._DB, Status: _CREATED}
 					err = filepath.WalkDir(source.Path, func(path string, entry fs.DirEntry, err error) error {
 						if strings.Contains(path, prevPath) {
 							prevName = entry.Name()
@@ -273,9 +265,9 @@ func (serv *Server) _FileCopyStartHandle(writer http.ResponseWriter, request *ht
 						} else {
 							newPath := strings.ReplaceAll(prevPath, parent, target.Path)
 
-							task._Id = []byte(_COPY_TASK + newPath)
-							task._Source = RemoteFile{Host: source.Host, Name: prevName, Path: prevPath, Type: prevType}
-							task._Target = RemoteFile{Host: target.Host, Name: prevName, Path: newPath, Type: prevType}
+							task.Id = []byte(_COPY_TASK + newPath)
+							task.Source = RemoteFile{Host: source.Host, Name: prevName, Path: prevPath, Type: prevType}
+							task.Target = RemoteFile{Host: target.Host, Name: prevName, Path: newPath, Type: prevType}
 							err = task.Save()
 
 							prevName = entry.Name()
@@ -291,13 +283,13 @@ func (serv *Server) _FileCopyStartHandle(writer http.ResponseWriter, request *ht
 
 					newPath := strings.ReplaceAll(prevPath, parent, target.Path)
 
-					task._Id = []byte(_COPY_TASK + newPath)
-					task._Source = RemoteFile{Host: source.Host, Name: prevName, Path: prevPath, Type: prevType}
-					task._Target = RemoteFile{Host: target.Host, Name: prevName, Path: newPath, Type: prevType}
+					task.Id = []byte(_COPY_TASK + newPath)
+					task.Source = RemoteFile{Host: source.Host, Name: prevName, Path: prevPath, Type: prevType}
+					task.Target = RemoteFile{Host: target.Host, Name: prevName, Path: newPath, Type: prevType}
 					err = task.Save()
 				} else {
 					id := []byte(_COPY_TASK + source.Path)
-					task := _CopyTask{_DB: serv._DB, _Id: id, _Status: _CREATED, _Source: source, _Target: target}
+					task := _CopyTask{_DB: serv._DB, Id: id, Status: _CREATED, Source: source, Target: target}
 					err = task.Save()
 				}
 			}
@@ -370,16 +362,17 @@ func (serv *Server) _ExecuteCopyTask() {
 						var data []byte
 						if data, err = item.ValueCopy(make([]byte, item.ValueSize())); err == nil {
 							task := &_CopyTask{}
-							if err = json.Unmarshal(data, task); err == nil && task._Status <= _DELAYED {
+							if err = json.Unmarshal(data, task); err == nil && task.Status <= _DELAYED {
 								fmt.Println(string(item.Key()))
 
 								task._DB = serv._DB
 								task._Context = ctx
 								task._Callback = callback
 								task._BufferSize = serv._Config.BufferSize
-								task._Status = _RUNNING
+								task.Status = _RUNNING
 								task.Save()
 
+								fmt.Println("TASK: ", task.Source)
 								go task.Process()
 								count--
 							}

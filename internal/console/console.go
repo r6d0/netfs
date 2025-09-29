@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	netfs "netfs/internal"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -52,6 +53,7 @@ func NewConsoleClient(config *netfs.Config) (*ConsoleClient, error) {
 			_HelpConsoleCommand{_Client: client},
 			_HostsConsoleCommand{_Client: client},
 			_FileInfoConsoleCommand{_Client: client},
+			_CopyFileConsoleCommand{_Client: client},
 		}
 
 		return client, nil
@@ -63,6 +65,66 @@ func NewConsoleClient(config *netfs.Config) (*ConsoleClient, error) {
 
 const PATH_SEPARATOR = "/"
 const PATH_SIZE = 2
+
+type _CopyFileConsoleCommand struct {
+	_Client *ConsoleClient
+}
+
+// Returns the command name.
+func (cmd _CopyFileConsoleCommand) GetName() string {
+	return "copy"
+}
+
+// Returns information about command.
+func (cmd _CopyFileConsoleCommand) GetDescription() string {
+	return strings.Join(
+		[]string{},
+		fmt.Sprintln(),
+	)
+}
+
+// Executes a command with arguments.
+func (cmd _CopyFileConsoleCommand) Execute(args ...string) (string, error) {
+	var err error
+
+	if len(args) > 0 {
+		var hosts []netfs.RemoteHost
+		if hosts, err = cmd._Client._Network.GetHosts(); err == nil {
+			sourcePath := strings.SplitN(args[0], PATH_SEPARATOR, PATH_SIZE)
+			targetPath := strings.SplitN(args[1], PATH_SEPARATOR, PATH_SIZE)
+
+			var sourceHost *netfs.RemoteHost
+			var targetHost *netfs.RemoteHost
+			for _, host := range hosts {
+				if sourcePath[0] == host.Name || sourcePath[0] == host.IP.String() {
+					sourceHost = &host
+				}
+
+				if targetPath[0] == host.Name || targetPath[0] == host.IP.String() {
+					targetHost = &host
+				}
+			}
+
+			if sourceHost != nil && targetHost != nil {
+				var sourceFile *netfs.RemoteFile
+				if sourceFile, err = sourceHost.GetFileInfo(sourcePath[1]); err == nil {
+					err = sourceFile.CopyTo(
+						&netfs.RemoteFile{
+							Host: *targetHost,
+							Name: filepath.Base(targetPath[1]),
+							Path: targetPath[1],
+							Type: sourceFile.Type,
+							Size: sourceFile.Size,
+						},
+					)
+				}
+			} else {
+				err = NoAvailableHosts
+			}
+		}
+	}
+	return "", err
+}
 
 // The command shows information about file on remote host.
 type _FileInfoConsoleCommand struct {

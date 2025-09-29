@@ -1,6 +1,7 @@
 package console_test
 
 import (
+	"errors"
 	"fmt"
 	netfs "netfs/internal"
 	"netfs/internal/console"
@@ -11,6 +12,7 @@ import (
 )
 
 const TEST_FILE_PATH = "./file.txt"
+const TARGET_TEST_FILE_PATH = "./file_copy.txt"
 
 func TestGetCommandNotFound(t *testing.T) {
 	config, _ := netfs.NewConfig()
@@ -118,8 +120,8 @@ func TestHostsCommandWithAvailableHosts(t *testing.T) {
 	}
 	fmt.Println(result)
 
-	defer server.Stop()
-	defer os.RemoveAll(config.Database.Path)
+	server.Stop()
+	os.RemoveAll(config.Database.Path)
 }
 
 func TestFileInfoCommandWithoutArguments(t *testing.T) {
@@ -173,8 +175,8 @@ func TestFileInfoCommandWithIncorrectHost(t *testing.T) {
 		t.Fatalf("error should be [console.NoAvailableHosts], but error is [%s]", err)
 	}
 
-	defer server.Stop()
-	defer os.RemoveAll(config.Database.Path)
+	server.Stop()
+	os.RemoveAll(config.Database.Path)
 }
 
 func TestFileInfoCommandByIp(t *testing.T) {
@@ -201,9 +203,9 @@ func TestFileInfoCommandByIp(t *testing.T) {
 	}
 	fmt.Println(result)
 
-	defer server.Stop()
-	defer os.RemoveAll(config.Database.Path)
-	defer os.RemoveAll(TEST_FILE_PATH)
+	server.Stop()
+	os.RemoveAll(config.Database.Path)
+	os.RemoveAll(TEST_FILE_PATH)
 }
 
 func TestFileInfoCommandByHostName(t *testing.T) {
@@ -231,9 +233,9 @@ func TestFileInfoCommandByHostName(t *testing.T) {
 	}
 	fmt.Println(result)
 
-	defer server.Stop()
-	defer os.RemoveAll(config.Database.Path)
-	defer os.RemoveAll(TEST_FILE_PATH)
+	server.Stop()
+	os.RemoveAll(config.Database.Path)
+	os.RemoveAll(TEST_FILE_PATH)
 }
 
 func TestFileInfoCommandNotFoundFile(t *testing.T) {
@@ -258,6 +260,139 @@ func TestFileInfoCommandNotFoundFile(t *testing.T) {
 	}
 	fmt.Println(result)
 
-	defer server.Stop()
-	defer os.RemoveAll(config.Database.Path)
+	server.Stop()
+	os.RemoveAll(config.Database.Path)
+}
+
+func TestCopyFileConsoleCommandByHostName(t *testing.T) {
+	os.RemoveAll(TARGET_TEST_FILE_PATH)
+	os.RemoveAll(TEST_FILE_PATH)
+	os.WriteFile(TEST_FILE_PATH, []byte("TEST"), 0644)
+
+	config, _ := netfs.NewConfig()
+	os.RemoveAll(config.Database.Path)
+
+	server, _ := netfs.NewServer(config)
+	go func() {
+		server.Start()
+	}()
+	time.Sleep(1 * time.Second) // Waiting for the server to start
+
+	netwotk, _ := netfs.NewNetwork(config)
+	hosts, _ := netwotk.GetHosts()
+
+	client, _ := console.NewConsoleClient(config)
+	command, _ := client.GetCommand("copy")
+
+	result, err := command.Execute(hosts[0].Name+"/"+TEST_FILE_PATH, hosts[0].Name+"/"+TARGET_TEST_FILE_PATH)
+	if err != nil {
+		t.Fatalf("error should be nil but error is [%s]", err)
+	}
+	fmt.Println(result)
+
+	time.Sleep(1 * time.Second) // Waiting for the server to start
+
+	_, err = os.Open(TARGET_TEST_FILE_PATH)
+	if err != nil {
+		t.Fatalf("error should be nil but error is [%s]", err)
+	}
+
+	server.Stop()
+	os.RemoveAll(config.Database.Path)
+	os.RemoveAll(TARGET_TEST_FILE_PATH)
+	os.RemoveAll(TEST_FILE_PATH)
+}
+
+func TestCopyFileConsoleCommandByIp(t *testing.T) {
+	os.RemoveAll(TARGET_TEST_FILE_PATH)
+	os.RemoveAll(TEST_FILE_PATH)
+	os.WriteFile(TEST_FILE_PATH, []byte("TEST"), 0644)
+
+	config, _ := netfs.NewConfig()
+	os.RemoveAll(config.Database.Path)
+
+	server, _ := netfs.NewServer(config)
+	go func() {
+		server.Start()
+	}()
+	time.Sleep(1 * time.Second) // Waiting for the server to start
+
+	netwotk, _ := netfs.NewNetwork(config)
+	hosts, _ := netwotk.GetHosts()
+
+	client, _ := console.NewConsoleClient(config)
+	command, _ := client.GetCommand("copy")
+
+	result, err := command.Execute(hosts[0].IP.String()+"/"+TEST_FILE_PATH, hosts[0].IP.String()+"/"+TARGET_TEST_FILE_PATH)
+	if err != nil {
+		t.Fatalf("error should be nil but error is [%s]", err)
+	}
+	fmt.Println(result)
+
+	time.Sleep(1 * time.Second) // Waiting for the server to start
+
+	_, err = os.Open(TARGET_TEST_FILE_PATH)
+	if err != nil {
+		t.Fatalf("error should be nil but error is [%s]", err)
+	}
+
+	server.Stop()
+	os.RemoveAll(config.Database.Path)
+	os.RemoveAll(TARGET_TEST_FILE_PATH)
+	os.RemoveAll(TEST_FILE_PATH)
+}
+
+func TestCopyFileConsoleCommandWithNotFoundFile(t *testing.T) {
+	os.RemoveAll(TARGET_TEST_FILE_PATH)
+
+	config, _ := netfs.NewConfig()
+	os.RemoveAll(config.Database.Path)
+
+	server, _ := netfs.NewServer(config)
+	go func() {
+		server.Start()
+	}()
+	time.Sleep(1 * time.Second) // Waiting for the server to start
+
+	netwotk, _ := netfs.NewNetwork(config)
+	hosts, _ := netwotk.GetHosts()
+
+	client, _ := console.NewConsoleClient(config)
+	command, _ := client.GetCommand("copy")
+
+	result, err := command.Execute(hosts[0].Name+"/"+"./incorrect_file.txt", hosts[0].Name+"/"+TARGET_TEST_FILE_PATH)
+	if err == nil {
+		t.Fatalf("error should be not nil but error is nil")
+	}
+	fmt.Println(result)
+
+	server.Stop()
+	os.RemoveAll(config.Database.Path)
+	os.RemoveAll(TARGET_TEST_FILE_PATH)
+}
+
+func TestCopyFileConsoleCommandWithIncorrectHost(t *testing.T) {
+	os.RemoveAll(TARGET_TEST_FILE_PATH)
+
+	config, _ := netfs.NewConfig()
+	os.RemoveAll(config.Database.Path)
+
+	server, _ := netfs.NewServer(config)
+	go func() {
+		server.Start()
+	}()
+	time.Sleep(1 * time.Second) // Waiting for the server to start
+
+	client, _ := console.NewConsoleClient(config)
+	command, _ := client.GetCommand("copy")
+
+	result, err := command.Execute("123.1.1.1/"+TEST_FILE_PATH, "123.1.1.1/"+TARGET_TEST_FILE_PATH)
+	if !errors.Is(err, console.NoAvailableHosts) {
+		t.Fatalf("error should be [console.NoAvailableHosts] but error is [%s]", err)
+	}
+	fmt.Println(result)
+
+	server.Stop()
+	os.RemoveAll(config.Database.Path)
+	os.RemoveAll(TARGET_TEST_FILE_PATH)
 }

@@ -14,18 +14,18 @@ import (
 const TEST_FILE_PATH = "./file.txt"
 const TARGET_TEST_FILE_PATH = "./file_copy.txt"
 
-// func TestGetCommandNotFound(t *testing.T) {
-// 	config, _ := netfs.NewConfig()
-// 	client, _ := console.NewConsoleClient(config)
-// 	command, err := client.GetCommand("not found command name")
-// 	if err != console.CommandNotFoundError {
-// 		t.Fatalf("error should be [console.CommandNotFoundError], but error is [%s]", err)
-// 	}
+func TestGetCommandNotFound(t *testing.T) {
+	config, _ := netfs.NewConfig()
+	client, _ := console.NewConsoleClient(config)
+	command, err := client.GetCommand("not found command name")
+	if err == nil {
+		t.Fatalf("error should be not nil, but error is nil")
+	}
 
-// 	if command != nil {
-// 		t.Fatalf("command should be nil, but command is [%s]", reflect.TypeOf(command))
-// 	}
-// }
+	if command != nil {
+		t.Fatalf("command should be nil, but command is [%s]", reflect.TypeOf(command))
+	}
+}
 
 func TestGetCommand(t *testing.T) {
 	config, _ := netfs.NewConfig()
@@ -42,62 +42,66 @@ func TestGetCommand(t *testing.T) {
 	}
 }
 
-// func TestHelpCommandWithoutArguments(t *testing.T) {
-// 	config, _ := netfs.NewConfig()
-// 	client, _ := console.NewConsoleClient(config)
-// 	command, _ := client.GetCommand("help")
+func TestHelpCommandWithoutArguments(t *testing.T) {
+	config, _ := netfs.NewConfig()
+	client, _ := console.NewConsoleClient(config)
+	command, _ := client.GetCommand("help")
 
-// 	result, err := command.Execute()
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but error is [%s]", err)
-// 	}
+	result, err := command.Execute()
+	if err != nil {
+		t.Fatalf("error should be nil, but error is [%s]", err)
+	}
 
-// 	if result == "" {
-// 		t.Fatal("result should be not empty, but result is empty")
-// 	}
-// 	fmt.Println(result)
-// }
+	if len(result.Lines) == 0 {
+		t.Fatal("result should be not empty, but result is empty")
+	}
+	fmt.Println(result)
+}
 
-// func TestHelpCommandSelfInfo(t *testing.T) {
-// 	config, _ := netfs.NewConfig()
-// 	client, _ := console.NewConsoleClient(config)
-// 	command, _ := client.GetCommand("help")
+func TestHelpCommandSelfInfo(t *testing.T) {
+	config, _ := netfs.NewConfig()
+	client, _ := console.NewConsoleClient(config)
+	command, _ := client.GetCommand("help")
 
-// 	result, err := command.Execute("help")
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but error is [%s]", err)
-// 	}
+	result, err := command.Execute("help")
+	if err != nil {
+		t.Fatalf("error should be nil, but error is [%s]", err)
+	}
 
-// 	if result == "" {
-// 		t.Fatal("result should be not empty, but result is empty")
-// 	}
-// 	fmt.Println(result)
-// }
+	if len(result.Lines) == 0 {
+		t.Fatal("result should be not empty, but result is empty")
+	}
+	fmt.Println(result)
+}
 
-// func TestHelpCommandWithArgument(t *testing.T) {
-// 	config, _ := netfs.NewConfig()
-// 	client, _ := console.NewConsoleClient(config)
-// 	command, _ := client.GetCommand("help")
+func TestHelpCommandWithArgument(t *testing.T) {
+	config, _ := netfs.NewConfig()
+	client, _ := console.NewConsoleClient(config)
+	command, _ := client.GetCommand("help")
 
-// 	result, err := command.Execute("hosts")
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but error is [%s]", err)
-// 	}
+	result, err := command.Execute("hosts")
+	if err != nil {
+		t.Fatalf("error should be nil, but error is [%s]", err)
+	}
 
-// 	if result == "" {
-// 		t.Fatal("result should be not empty, but result is empty")
-// 	}
-// 	fmt.Println(result)
-// }
+	if len(result.Lines) == 0 {
+		t.Fatal("result should be not empty, but result is empty")
+	}
+	fmt.Println(result)
+}
 
 func TestHostsCommandWithoutAvailableHosts(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	client, _ := console.NewConsoleClient(config)
 	command, _ := client.GetCommand("hosts")
 
-	_, err := command.Execute()
-	if err != console.NoAvailableHosts {
-		t.Fatalf("error should be [console.NoAvailableHosts], but error is [%s]", err)
+	result, err := command.Execute()
+	if err != nil {
+		t.Fatalf("error should be nil, but error is [%s]", err)
+	}
+
+	if result.Lines[0].Fields[0] != "no available hosts" {
+		t.Fatalf("message should be [no available hosts], but message is [%s]", result.Lines[0].Fields[0])
 	}
 }
 
@@ -117,6 +121,10 @@ func TestHostsCommandWithAvailableHosts(t *testing.T) {
 	result, err := command.Execute()
 	if err != nil {
 		t.Fatalf("error should be nil, but error is [%s]", err)
+	}
+
+	if len(result.Lines) == 0 {
+		t.Fatalf("result should be not empty, but result is empty")
 	}
 	fmt.Println(result)
 

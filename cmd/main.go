@@ -6,42 +6,58 @@ import (
 	netfs "netfs/internal"
 	"netfs/internal/console"
 	"os"
+	"strconv"
 )
 
 const NAME_INDEX = 1
 
 func main() {
-	var name string
 	var err error
+	var config *netfs.Config
 
-	if len(os.Args) > NAME_INDEX {
-		name = os.Args[NAME_INDEX]
+	if config, err = netfs.NewConfig(); err == nil {
+		var client console.ConsoleClient
+		if client, err = console.NewConsoleClient(config); err == nil {
+			name := "help"
+			if len(os.Args) > NAME_INDEX {
+				name = os.Args[NAME_INDEX]
+			}
 
-		// Prepare configuration.
-		var config *netfs.Config
-		if config, err = netfs.NewConfig(); err == nil {
-			// Prepare console client.
-			var client *console.ConsoleClient
-			if client, err = console.NewConsoleClient(config); err == nil {
-				// Execute command.
-				var command console.ConsoleCommand
-				if command, err = client.GetCommand(name); err == nil {
-					var res string
-					if res, err = command.Execute(os.Args[NAME_INDEX:]...); len(res) > 0 {
-						fmt.Print(res)
-					}
+			var command console.ConsoleCommand
+			if command, err = client.GetCommand(name); err == nil {
+				var res console.ConsoleCommandResult
+				if res, err = command.Execute(os.Args[NAME_INDEX+1:]...); err == nil {
+					print(res)
 				}
 			}
 		}
-	} else {
-		err = console.NeedHelpError
 	}
 
-	if err == console.NeedHelpError || err == console.CommandNotFoundError {
-		// if help, _ := console.GetCommand("help").Execute(name); len(help) > 0 {
-		// 	fmt.Print(help)
-		// }
-	} else if err != nil {
-		panic(err.Error())
+	if err != nil {
+		panic(err)
+	}
+}
+
+func print(result console.ConsoleCommandResult) {
+	maxFieldSize := []int{0}
+	for _, line := range result.Lines {
+		for index, field := range line.Fields {
+			if index >= len(maxFieldSize) {
+				maxFieldSize = append(maxFieldSize, 0)
+			}
+			maxFieldSize[index] = max(maxFieldSize[index], len(field))
+		}
+	}
+
+	for _, line := range result.Lines {
+		for index, size := range maxFieldSize {
+			value := ""
+			if index < len(line.Fields) {
+				value = line.Fields[index]
+			}
+			fmt.Printf("%-"+strconv.Itoa(size)+"s", value)
+			fmt.Print("\t")
+		}
+		fmt.Println()
 	}
 }

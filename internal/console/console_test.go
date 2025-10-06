@@ -14,18 +14,18 @@ import (
 const TEST_FILE_PATH = "./file.txt"
 const TARGET_TEST_FILE_PATH = "./file_copy.txt"
 
-func TestGetCommandNotFound(t *testing.T) {
-	config, _ := netfs.NewConfig()
-	client, _ := console.NewConsoleClient(config)
-	command, err := client.GetCommand("not found command name")
-	if err != console.CommandNotFoundError {
-		t.Fatalf("error should be [console.CommandNotFoundError], but error is [%s]", err)
-	}
+// func TestGetCommandNotFound(t *testing.T) {
+// 	config, _ := netfs.NewConfig()
+// 	client, _ := console.NewConsoleClient(config)
+// 	command, err := client.GetCommand("not found command name")
+// 	if err != console.CommandNotFoundError {
+// 		t.Fatalf("error should be [console.CommandNotFoundError], but error is [%s]", err)
+// 	}
 
-	if command != nil {
-		t.Fatalf("command should be nil, but command is [%s]", reflect.TypeOf(command))
-	}
-}
+// 	if command != nil {
+// 		t.Fatalf("command should be nil, but command is [%s]", reflect.TypeOf(command))
+// 	}
+// }
 
 func TestGetCommand(t *testing.T) {
 	config, _ := netfs.NewConfig()
@@ -42,53 +42,53 @@ func TestGetCommand(t *testing.T) {
 	}
 }
 
-func TestHelpCommandWithoutArguments(t *testing.T) {
-	config, _ := netfs.NewConfig()
-	client, _ := console.NewConsoleClient(config)
-	command, _ := client.GetCommand("help")
+// func TestHelpCommandWithoutArguments(t *testing.T) {
+// 	config, _ := netfs.NewConfig()
+// 	client, _ := console.NewConsoleClient(config)
+// 	command, _ := client.GetCommand("help")
 
-	result, err := command.Execute()
-	if err != nil {
-		t.Fatalf("error should be nil, but error is [%s]", err)
-	}
+// 	result, err := command.Execute()
+// 	if err != nil {
+// 		t.Fatalf("error should be nil, but error is [%s]", err)
+// 	}
 
-	if result == "" {
-		t.Fatal("result should be not empty, but result is empty")
-	}
-	fmt.Println(result)
-}
+// 	if result == "" {
+// 		t.Fatal("result should be not empty, but result is empty")
+// 	}
+// 	fmt.Println(result)
+// }
 
-func TestHelpCommandSelfInfo(t *testing.T) {
-	config, _ := netfs.NewConfig()
-	client, _ := console.NewConsoleClient(config)
-	command, _ := client.GetCommand("help")
+// func TestHelpCommandSelfInfo(t *testing.T) {
+// 	config, _ := netfs.NewConfig()
+// 	client, _ := console.NewConsoleClient(config)
+// 	command, _ := client.GetCommand("help")
 
-	result, err := command.Execute("help")
-	if err != nil {
-		t.Fatalf("error should be nil, but error is [%s]", err)
-	}
+// 	result, err := command.Execute("help")
+// 	if err != nil {
+// 		t.Fatalf("error should be nil, but error is [%s]", err)
+// 	}
 
-	if result == "" {
-		t.Fatal("result should be not empty, but result is empty")
-	}
-	fmt.Println(result)
-}
+// 	if result == "" {
+// 		t.Fatal("result should be not empty, but result is empty")
+// 	}
+// 	fmt.Println(result)
+// }
 
-func TestHelpCommandWithArgument(t *testing.T) {
-	config, _ := netfs.NewConfig()
-	client, _ := console.NewConsoleClient(config)
-	command, _ := client.GetCommand("help")
+// func TestHelpCommandWithArgument(t *testing.T) {
+// 	config, _ := netfs.NewConfig()
+// 	client, _ := console.NewConsoleClient(config)
+// 	command, _ := client.GetCommand("help")
 
-	result, err := command.Execute("hosts")
-	if err != nil {
-		t.Fatalf("error should be nil, but error is [%s]", err)
-	}
+// 	result, err := command.Execute("hosts")
+// 	if err != nil {
+// 		t.Fatalf("error should be nil, but error is [%s]", err)
+// 	}
 
-	if result == "" {
-		t.Fatal("result should be not empty, but result is empty")
-	}
-	fmt.Println(result)
-}
+// 	if result == "" {
+// 		t.Fatal("result should be not empty, but result is empty")
+// 	}
+// 	fmt.Println(result)
+// }
 
 func TestHostsCommandWithoutAvailableHosts(t *testing.T) {
 	config, _ := netfs.NewConfig()

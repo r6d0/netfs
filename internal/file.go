@@ -26,6 +26,14 @@ const (
 	DIRECTORY
 )
 
+// Returns a string representation of the file type.
+func (fileType RemoteFileType) String() string {
+	if fileType == FILE {
+		return "f"
+	}
+	return "d"
+}
+
 // Information about file.
 type RemoteFile struct {
 	Host    RemoteHost

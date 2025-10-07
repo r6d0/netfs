@@ -56,7 +56,7 @@ func print(result console.ConsoleCommandResult) {
 				value = line.Fields[index]
 			}
 			fmt.Printf("%-"+strconv.Itoa(size)+"s", value)
-			fmt.Print("\t")
+			fmt.Print(" ")
 		}
 		fmt.Println()
 	}

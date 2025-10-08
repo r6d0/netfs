@@ -1,7 +1,6 @@
 package console
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	netfs "netfs/internal"
@@ -11,9 +10,6 @@ import (
 )
 
 // -------------------------------------------------------- PUBLIC CODE ---------------------------------------------------------
-
-var NeedHelpError = errors.New("help")
-var NoAvailableHosts = errors.New("No available hosts")
 
 type ConsoleCommandResultLine struct {
 	Fields []string
@@ -52,6 +48,7 @@ func NewConsoleClient(config *netfs.Config) (ConsoleClient, error) {
 			hostsConsoleCommand{client: client},
 			fileInfoConsoleCommand{client: client},
 			copyFileConsoleCommand{client: client},
+			startServerConsoleCommand{client: client},
 		}
 
 		return client, nil
@@ -80,8 +77,55 @@ func (client *consoleClient) GetCommand(name string) (ConsoleCommand, error) {
 	return nil, fmt.Errorf("Command [%s] not found. Use [help] for details", name)
 }
 
+// The command starts netfs server.
+type startServerConsoleCommand struct {
+	client *consoleClient
+}
+
+// Returns the command name.
+func (cmd startServerConsoleCommand) GetName() string {
+	return "start"
+}
+
+// Returns information about command.
+func (cmd startServerConsoleCommand) GetDescription() ConsoleCommandResult {
+	return ConsoleCommandResult{
+		[]ConsoleCommandResultLine{
+			{
+				Fields: []string{
+					"start [config.json]",
+					"",
+					"starts netfs server",
+				},
+			},
+			{Fields: []string{"", "netfs start", "starts the netfs server with the default configuration"}},
+			{Fields: []string{"", "netfs start /home/etc/config.json", "starts the netfs server with the configuration"}},
+		},
+	}
+}
+
+// Executes a command with arguments.
+func (cmd startServerConsoleCommand) Execute(args ...string) (ConsoleCommandResult, error) {
+	var err error
+	var config *netfs.Config
+
+	if len(args) > 0 {
+		config, err = netfs.NewConfig(args[0])
+	} else {
+		config, err = netfs.NewConfig()
+	}
+
+	if err == nil {
+		var server *netfs.Server
+		if server, err = netfs.NewServer(config); err == nil {
+			server.Start()
+		}
+	}
+	return ConsoleCommandResult{}, err
+}
+
 // The command copies the file to the remote host.
-type copyFileConsoleCommand struct {
+type copyFileConsoleCommand struct { // TODO. the command to check the status of the copy operation.
 	client *consoleClient
 }
 
@@ -209,7 +253,7 @@ func (cmd fileInfoConsoleCommand) Execute(args ...string) (ConsoleCommandResult,
 							result.Lines = append(
 								result.Lines,
 								ConsoleCommandResultLine{Fields: []string{
-									file.Host.Name,
+									file.Host.IP.String(),
 									file.Path,
 									file.Type.String(),
 									strconv.Itoa(int(file.Size)), // TODO. up to maximum avaliable unit.

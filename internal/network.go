@@ -55,6 +55,16 @@ func (network *Network) GetHost(ip net.IP) (*RemoteHost, error) {
 	return nil, err
 }
 
+// Gets local IP address or error.
+func (network *Network) GetLocalIP() (net.IP, error) {
+	connection, err := net.Dial(_UDP, _UDP_HOST)
+	if connection != nil {
+		defer connection.Close()
+		return connection.LocalAddr().(*net.UDPAddr).IP, nil
+	}
+	return nil, err
+}
+
 // Creates a new instance of Network, returns an error if creation failed.
 func NewNetwork(config *Config) (*Network, error) {
 	return &Network{_Config: config, _Client: &http.Client{Timeout: config.Client.Timeout}}, nil

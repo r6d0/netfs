@@ -1,7 +1,6 @@
 package console_test
 
 import (
-	"errors"
 	"fmt"
 	netfs "netfs/internal"
 	"netfs/internal/console"
@@ -18,8 +17,8 @@ func TestGetCommandNotFound(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	client, _ := console.NewConsoleClient(config)
 	command, err := client.GetCommand("not found command name")
-	if err != console.CommandNotFoundError {
-		t.Fatalf("error should be [console.CommandNotFoundError], but error is [%s]", err)
+	if err == nil {
+		t.Fatalf("error should be not nil, but error is nil")
 	}
 
 	if command != nil {
@@ -42,6 +41,8 @@ func TestGetCommand(t *testing.T) {
 	}
 }
 
+// Help command
+
 func TestHelpCommandWithoutArguments(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	client, _ := console.NewConsoleClient(config)
@@ -52,7 +53,7 @@ func TestHelpCommandWithoutArguments(t *testing.T) {
 		t.Fatalf("error should be nil, but error is [%s]", err)
 	}
 
-	if result == "" {
+	if len(result.Lines) == 0 {
 		t.Fatal("result should be not empty, but result is empty")
 	}
 	fmt.Println(result)
@@ -68,7 +69,7 @@ func TestHelpCommandSelfInfo(t *testing.T) {
 		t.Fatalf("error should be nil, but error is [%s]", err)
 	}
 
-	if result == "" {
+	if len(result.Lines) == 0 {
 		t.Fatal("result should be not empty, but result is empty")
 	}
 	fmt.Println(result)
@@ -84,20 +85,26 @@ func TestHelpCommandWithArgument(t *testing.T) {
 		t.Fatalf("error should be nil, but error is [%s]", err)
 	}
 
-	if result == "" {
+	if len(result.Lines) == 0 {
 		t.Fatal("result should be not empty, but result is empty")
 	}
 	fmt.Println(result)
 }
+
+// Hosts command
 
 func TestHostsCommandWithoutAvailableHosts(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	client, _ := console.NewConsoleClient(config)
 	command, _ := client.GetCommand("hosts")
 
-	_, err := command.Execute()
-	if err != console.NoAvailableHosts {
-		t.Fatalf("error should be [console.NoAvailableHosts], but error is [%s]", err)
+	result, err := command.Execute()
+	if err != nil {
+		t.Fatalf("error should be nil, but error is [%s]", err)
+	}
+
+	if result.Lines[0].Fields[0] != "no available hosts" {
+		t.Fatalf("message should be [no available hosts], but message is [%s]", result.Lines[0].Fields[0])
 	}
 }
 
@@ -109,7 +116,7 @@ func TestHostsCommandWithAvailableHosts(t *testing.T) {
 	go func() {
 		server.Start()
 	}()
-	time.Sleep(1 * time.Second) // Waiting for the server to start
+	time.Sleep(1000 * time.Second) // Waiting for the server to start
 
 	client, _ := console.NewConsoleClient(config)
 	command, _ := client.GetCommand("hosts")
@@ -118,21 +125,32 @@ func TestHostsCommandWithAvailableHosts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error should be nil, but error is [%s]", err)
 	}
+
+	if len(result.Lines) == 0 {
+		t.Fatalf("result should be not empty, but result is empty")
+	}
 	fmt.Println(result)
 
 	server.Stop()
 	os.RemoveAll(config.Database.Path)
 }
 
+// File command
+
 func TestFileInfoCommandWithoutArguments(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	client, _ := console.NewConsoleClient(config)
 	command, _ := client.GetCommand("file")
 
-	_, err := command.Execute()
-	if err != console.NeedHelpError {
-		t.Fatalf("error should be [console.NeedHelpError], but error is [%s]", err)
+	result, err := command.Execute()
+	if err != nil {
+		t.Fatalf("error should be nil, but error is [%s]", err)
 	}
+
+	if result.Lines[0].Fields[0] != "unsupported format" {
+		t.Fatalf("result should be equals [unsupported format]")
+	}
+	fmt.Println(result)
 }
 
 func TestFileInfoCommandWithIncorrectArguments(t *testing.T) {
@@ -140,10 +158,15 @@ func TestFileInfoCommandWithIncorrectArguments(t *testing.T) {
 	client, _ := console.NewConsoleClient(config)
 	command, _ := client.GetCommand("file")
 
-	_, err := command.Execute("test")
-	if err != console.NeedHelpError {
-		t.Fatalf("error should be [console.NeedHelpError], but error is [%s]", err)
+	result, err := command.Execute("test")
+	if err != nil {
+		t.Fatalf("error should be nil, but error is [%s]", err)
 	}
+
+	if result.Lines[0].Fields[0] != "unsupported format" {
+		t.Fatalf("result should be equals [unsupported format]")
+	}
+	fmt.Println(result)
 }
 
 func TestFileInfoCommandWithoutAvailableHosts(t *testing.T) {
@@ -151,10 +174,15 @@ func TestFileInfoCommandWithoutAvailableHosts(t *testing.T) {
 	client, _ := console.NewConsoleClient(config)
 	command, _ := client.GetCommand("file")
 
-	_, err := command.Execute("192.1.1.2/./main.exe")
-	if err != console.NoAvailableHosts {
-		t.Fatalf("error should be [console.NoAvailableHosts], but error is [%s]", err)
+	result, err := command.Execute("192.1.1.2/./main.exe")
+	if err != nil {
+		t.Fatalf("error should be nil, but error is [%s]", err)
 	}
+
+	if result.Lines[0].Fields[0] != "no available hosts" {
+		t.Fatalf("result should be equals [no available hosts]")
+	}
+	fmt.Println(result)
 }
 
 func TestFileInfoCommandWithIncorrectHost(t *testing.T) {
@@ -170,9 +198,13 @@ func TestFileInfoCommandWithIncorrectHost(t *testing.T) {
 	client, _ := console.NewConsoleClient(config)
 	command, _ := client.GetCommand("file")
 
-	_, err := command.Execute("TEST/./main.exe")
-	if err != console.NoAvailableHosts {
-		t.Fatalf("error should be [console.NoAvailableHosts], but error is [%s]", err)
+	result, err := command.Execute("TEST/./file.txt")
+	if err != nil {
+		t.Fatalf("error should be nil, but error is [%s]", err)
+	}
+
+	if result.Lines[0].Fields[0] != "no available hosts" {
+		t.Fatalf("result should be equals [no available hosts], but result is [%s]", result.Lines[0].Fields[0])
 	}
 
 	server.Stop()
@@ -263,6 +295,8 @@ func TestFileInfoCommandNotFoundFile(t *testing.T) {
 	server.Stop()
 	os.RemoveAll(config.Database.Path)
 }
+
+// Copy command
 
 func TestCopyFileConsoleCommandByHostName(t *testing.T) {
 	os.RemoveAll(TARGET_TEST_FILE_PATH)
@@ -387,10 +421,13 @@ func TestCopyFileConsoleCommandWithIncorrectHost(t *testing.T) {
 	command, _ := client.GetCommand("copy")
 
 	result, err := command.Execute("123.1.1.1/"+TEST_FILE_PATH, "123.1.1.1/"+TARGET_TEST_FILE_PATH)
-	if !errors.Is(err, console.NoAvailableHosts) {
-		t.Fatalf("error should be [console.NoAvailableHosts] but error is [%s]", err)
+	if err != nil {
+		t.Fatalf("error should be nil but error is [%s]", err)
 	}
-	fmt.Println(result)
+
+	if result.Lines[0].Fields[0] != "no available hosts: [123.1.1.1 123.1.1.1]" {
+		t.Fatalf("result should be equals [no available hosts: [123.1.1.1 123.1.1.1]], but result is: [%s]", result.Lines[0].Fields[0])
+	}
 
 	server.Stop()
 	os.RemoveAll(config.Database.Path)

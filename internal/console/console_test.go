@@ -1,7 +1,6 @@
 package console_test
 
 import (
-	"errors"
 	"fmt"
 	netfs "netfs/internal"
 	"netfs/internal/console"
@@ -422,10 +421,13 @@ func TestCopyFileConsoleCommandWithIncorrectHost(t *testing.T) {
 	command, _ := client.GetCommand("copy")
 
 	result, err := command.Execute("123.1.1.1/"+TEST_FILE_PATH, "123.1.1.1/"+TARGET_TEST_FILE_PATH)
-	if !errors.Is(err, console.NoAvailableHosts) {
-		t.Fatalf("error should be [console.NoAvailableHosts] but error is [%s]", err)
+	if err != nil {
+		t.Fatalf("error should be nil but error is [%s]", err)
 	}
-	fmt.Println(result)
+
+	if result.Lines[0].Fields[0] != "no available hosts: [123.1.1.1 123.1.1.1]" {
+		t.Fatalf("result should be equals [no available hosts: [123.1.1.1 123.1.1.1]], but result is: [%s]", result.Lines[0].Fields[0])
+	}
 
 	server.Stop()
 	os.RemoveAll(config.Database.Path)

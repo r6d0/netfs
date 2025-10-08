@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	netfs "netfs/internal"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -50,6 +51,7 @@ func NewConsoleClient(config *netfs.Config) (ConsoleClient, error) {
 			helpConsoleCommand{client: client},
 			hostsConsoleCommand{client: client},
 			fileInfoConsoleCommand{client: client},
+			copyFileConsoleCommand{client: client},
 		}
 
 		return client, nil
@@ -78,68 +80,89 @@ func (client *consoleClient) GetCommand(name string) (ConsoleCommand, error) {
 	return nil, fmt.Errorf("Command [%s] not found. Use [help] for details", name)
 }
 
-// type _CopyFileConsoleCommand struct {
-// 	_Client *ConsoleClient
-// }
+// The command copies the file to the remote host.
+type copyFileConsoleCommand struct {
+	client *consoleClient
+}
 
-// // Returns the command name.
-// func (cmd _CopyFileConsoleCommand) GetName() string {
-// 	return "copy"
-// }
+// Returns the command name.
+func (cmd copyFileConsoleCommand) GetName() string {
+	return "copy"
+}
 
-// // Returns information about command.
-// func (cmd _CopyFileConsoleCommand) GetDescription() string {
-// 	return strings.Join(
-// 		[]string{},
-// 		fmt.Sprintln(),
-// 	)
-// }
+// Returns information about command.
+func (cmd copyFileConsoleCommand) GetDescription() ConsoleCommandResult {
+	return ConsoleCommandResult{
+		[]ConsoleCommandResultLine{
+			{
+				Fields: []string{
+					"copy [host]/[path] [host]/[path]",
+					"",
+					"copies the file to the remote host",
+				},
+			},
+			{Fields: []string{"", "netfs copy 192.51.12.1/file.txt 192.51.12.65/file.txt", "copies the file to the remote host by IP"}},
+			{Fields: []string{"", "netfs copy myhostname1/file.txt myhostname2/file.txt", "copies the file to the remote host by name"}},
+		},
+	}
+}
 
-// // Executes a command with arguments.
-// func (cmd _CopyFileConsoleCommand) Execute(args ...string) (string, error) {
-// 	var err error
+// Executes a command with arguments.
+func (cmd copyFileConsoleCommand) Execute(args ...string) (ConsoleCommandResult, error) {
+	var err error
+	result := unsupportedFormat()
 
-// 	if len(args) > 0 {
-// 		var hosts []netfs.RemoteHost
-// 		if hosts, err = cmd._Client._Network.GetHosts(); err == nil {
-// 			sourcePath := strings.SplitN(args[0], PATH_SEPARATOR, PATH_SIZE)
-// 			targetPath := strings.SplitN(args[1], PATH_SEPARATOR, PATH_SIZE)
+	if len(args) > 0 {
+		var hosts []netfs.RemoteHost
+		if hosts, err = cmd.client.network.GetHosts(); err == nil {
+			result = noAvailableHosts()
+			sourcePath := strings.SplitN(args[0], PATH_SEPARATOR, PATH_SIZE)
+			targetPath := strings.SplitN(args[1], PATH_SEPARATOR, PATH_SIZE)
 
-// 			var sourceHost *netfs.RemoteHost
-// 			var targetHost *netfs.RemoteHost
-// 			for _, host := range hosts {
-// 				if sourcePath[0] == host.Name || sourcePath[0] == host.IP.String() {
-// 					sourceHost = &host
-// 				}
+			var sourceHost *netfs.RemoteHost
+			var targetHost *netfs.RemoteHost
+			for _, host := range hosts {
+				if sourcePath[0] == host.Name || sourcePath[0] == host.IP.String() {
+					sourceHost = &host
+				}
 
-// 				if targetPath[0] == host.Name || targetPath[0] == host.IP.String() {
-// 					targetHost = &host
-// 				}
-// 			}
+				if targetPath[0] == host.Name || targetPath[0] == host.IP.String() {
+					targetHost = &host
+				}
+			}
 
-// 			if sourceHost != nil && targetHost != nil {
-// 				var sourceFile *netfs.RemoteFile
-// 				if sourceFile, err = sourceHost.GetFileInfo(sourcePath[1]); err == nil {
-// 					err = sourceFile.CopyTo(
-// 						&netfs.RemoteFile{
-// 							Host: *targetHost,
-// 							Name: filepath.Base(targetPath[1]),
-// 							Path: targetPath[1],
-// 							Type: sourceFile.Type,
-// 							Size: sourceFile.Size,
-// 						},
-// 					)
-// 				}
-// 			} else {
-// 				err = NoAvailableHosts
-// 			}
-// 		}
-// 	}
-// 	return "", err
-// }
+			if sourceHost != nil && targetHost != nil {
+				var sourceFile *netfs.RemoteFile
+				if sourceFile, err = sourceHost.GetFileInfo(sourcePath[1]); err == nil {
+					result = ConsoleCommandResult{}
+					err = sourceFile.CopyTo(
+						&netfs.RemoteFile{
+							Host: *targetHost,
+							Name: filepath.Base(targetPath[1]),
+							Path: targetPath[1],
+							Type: sourceFile.Type,
+							Size: sourceFile.Size,
+						},
+					)
+				}
+			} else {
+				hosts := []string{}
+				if sourceHost == nil {
+					hosts = append(hosts, sourcePath[0])
+				}
+
+				if targetHost == nil {
+					hosts = append(hosts, targetPath[0])
+				}
+				result = noAvailableHosts(hosts...)
+			}
+		}
+	}
+	return result, err
+}
 
 // The command shows information about file on remote host.
-type fileInfoConsoleCommand struct {
+type fileInfoConsoleCommand struct { // TODO. command for shows files in a directory
 	client *consoleClient
 }
 
@@ -310,6 +333,9 @@ func unsupportedFormat() ConsoleCommandResult {
 }
 
 // Returns result "no available hosts".
-func noAvailableHosts() ConsoleCommandResult {
+func noAvailableHosts(args ...string) ConsoleCommandResult {
+	if len(args) > 0 {
+		return ConsoleCommandResult{[]ConsoleCommandResultLine{{Fields: []string{fmt.Sprintf("no available hosts: %s", args)}}}}
+	}
 	return ConsoleCommandResult{[]ConsoleCommandResultLine{{Fields: []string{"no available hosts"}}}}
 }

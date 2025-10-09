@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	netfs "netfs/internal"
+	"netfs/internal/server"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -77,6 +78,25 @@ func (client *consoleClient) GetCommand(name string) (ConsoleCommand, error) {
 	return nil, fmt.Errorf("Command [%s] not found. Use [help] for details", name)
 }
 
+type stopServerConsoleCommand struct {
+	client *consoleClient
+}
+
+// Returns the command name.
+func (cmd stopServerConsoleCommand) GetName() string {
+	return "stop"
+}
+
+// Returns information about command.
+func (cmd stopServerConsoleCommand) GetDescription() ConsoleCommandResult {
+	return ConsoleCommandResult{}
+}
+
+// Executes a command with arguments.
+func (cmd stopServerConsoleCommand) Execute(args ...string) (ConsoleCommandResult, error) {
+	return ConsoleCommandResult{}, nil
+}
+
 // The command starts netfs server.
 type startServerConsoleCommand struct {
 	client *consoleClient
@@ -116,9 +136,9 @@ func (cmd startServerConsoleCommand) Execute(args ...string) (ConsoleCommandResu
 	}
 
 	if err == nil {
-		var server *netfs.Server
-		if server, err = netfs.NewServer(config); err == nil {
-			server.Start()
+		var srv *server.Server
+		if srv, err = server.NewServer(config); err == nil {
+			srv.Start()
 		}
 	}
 	return ConsoleCommandResult{}, err

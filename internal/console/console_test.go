@@ -4,6 +4,7 @@ import (
 	"fmt"
 	netfs "netfs/internal"
 	"netfs/internal/console"
+	"netfs/internal/server"
 	"os"
 	"reflect"
 	"testing"
@@ -112,11 +113,11 @@ func TestHostsCommandWithAvailableHosts(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	os.RemoveAll(config.Database.Path)
 
-	server, _ := netfs.NewServer(config)
+	srv, _ := server.NewServer(config)
 	go func() {
-		server.Start()
+		srv.Start()
 	}()
-	time.Sleep(1000 * time.Second) // Waiting for the server to start
+	time.Sleep(1 * time.Second) // Waiting for the server to start
 
 	client, _ := console.NewConsoleClient(config)
 	command, _ := client.GetCommand("hosts")
@@ -131,7 +132,7 @@ func TestHostsCommandWithAvailableHosts(t *testing.T) {
 	}
 	fmt.Println(result)
 
-	server.Stop()
+	srv.Stop()
 	os.RemoveAll(config.Database.Path)
 }
 
@@ -189,9 +190,9 @@ func TestFileInfoCommandWithIncorrectHost(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	os.RemoveAll(config.Database.Path)
 
-	server, _ := netfs.NewServer(config)
+	srv, _ := server.NewServer(config)
 	go func() {
-		server.Start()
+		srv.Start()
 	}()
 	time.Sleep(1 * time.Second) // Waiting for the server to start
 
@@ -207,7 +208,7 @@ func TestFileInfoCommandWithIncorrectHost(t *testing.T) {
 		t.Fatalf("result should be equals [no available hosts], but result is [%s]", result.Lines[0].Fields[0])
 	}
 
-	server.Stop()
+	srv.Stop()
 	os.RemoveAll(config.Database.Path)
 }
 
@@ -217,9 +218,9 @@ func TestFileInfoCommandByIp(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	os.RemoveAll(config.Database.Path)
 
-	server, _ := netfs.NewServer(config)
+	srv, _ := server.NewServer(config)
 	go func() {
-		server.Start()
+		srv.Start()
 	}()
 	time.Sleep(1 * time.Second) // Waiting for the server to start
 
@@ -235,7 +236,7 @@ func TestFileInfoCommandByIp(t *testing.T) {
 	}
 	fmt.Println(result)
 
-	server.Stop()
+	srv.Stop()
 	os.RemoveAll(config.Database.Path)
 	os.RemoveAll(TEST_FILE_PATH)
 }
@@ -247,9 +248,9 @@ func TestFileInfoCommandByHostName(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	os.RemoveAll(config.Database.Path)
 
-	server, _ := netfs.NewServer(config)
+	srv, _ := server.NewServer(config)
 	go func() {
-		server.Start()
+		srv.Start()
 	}()
 	time.Sleep(1 * time.Second) // Waiting for the server to start
 
@@ -265,7 +266,7 @@ func TestFileInfoCommandByHostName(t *testing.T) {
 	}
 	fmt.Println(result)
 
-	server.Stop()
+	srv.Stop()
 	os.RemoveAll(config.Database.Path)
 	os.RemoveAll(TEST_FILE_PATH)
 }
@@ -274,9 +275,9 @@ func TestFileInfoCommandNotFoundFile(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	os.RemoveAll(config.Database.Path)
 
-	server, _ := netfs.NewServer(config)
+	srv, _ := server.NewServer(config)
 	go func() {
-		server.Start()
+		srv.Start()
 	}()
 	time.Sleep(1 * time.Second) // Waiting for the server to start
 
@@ -292,7 +293,7 @@ func TestFileInfoCommandNotFoundFile(t *testing.T) {
 	}
 	fmt.Println(result)
 
-	server.Stop()
+	srv.Stop()
 	os.RemoveAll(config.Database.Path)
 }
 
@@ -306,9 +307,9 @@ func TestCopyFileConsoleCommandByHostName(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	os.RemoveAll(config.Database.Path)
 
-	server, _ := netfs.NewServer(config)
+	srv, _ := server.NewServer(config)
 	go func() {
-		server.Start()
+		srv.Start()
 	}()
 	time.Sleep(1 * time.Second) // Waiting for the server to start
 
@@ -331,7 +332,7 @@ func TestCopyFileConsoleCommandByHostName(t *testing.T) {
 		t.Fatalf("error should be nil but error is [%s]", err)
 	}
 
-	server.Stop()
+	srv.Stop()
 	os.RemoveAll(config.Database.Path)
 	os.RemoveAll(TARGET_TEST_FILE_PATH)
 	os.RemoveAll(TEST_FILE_PATH)
@@ -345,9 +346,9 @@ func TestCopyFileConsoleCommandByIp(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	os.RemoveAll(config.Database.Path)
 
-	server, _ := netfs.NewServer(config)
+	srv, _ := server.NewServer(config)
 	go func() {
-		server.Start()
+		srv.Start()
 	}()
 	time.Sleep(1 * time.Second) // Waiting for the server to start
 
@@ -370,7 +371,7 @@ func TestCopyFileConsoleCommandByIp(t *testing.T) {
 		t.Fatalf("error should be nil but error is [%s]", err)
 	}
 
-	server.Stop()
+	srv.Stop()
 	os.RemoveAll(config.Database.Path)
 	os.RemoveAll(TARGET_TEST_FILE_PATH)
 	os.RemoveAll(TEST_FILE_PATH)
@@ -382,9 +383,9 @@ func TestCopyFileConsoleCommandWithNotFoundFile(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	os.RemoveAll(config.Database.Path)
 
-	server, _ := netfs.NewServer(config)
+	srv, _ := server.NewServer(config)
 	go func() {
-		server.Start()
+		srv.Start()
 	}()
 	time.Sleep(1 * time.Second) // Waiting for the server to start
 
@@ -400,7 +401,7 @@ func TestCopyFileConsoleCommandWithNotFoundFile(t *testing.T) {
 	}
 	fmt.Println(result)
 
-	server.Stop()
+	srv.Stop()
 	os.RemoveAll(config.Database.Path)
 	os.RemoveAll(TARGET_TEST_FILE_PATH)
 }
@@ -411,9 +412,9 @@ func TestCopyFileConsoleCommandWithIncorrectHost(t *testing.T) {
 	config, _ := netfs.NewConfig()
 	os.RemoveAll(config.Database.Path)
 
-	server, _ := netfs.NewServer(config)
+	srv, _ := server.NewServer(config)
 	go func() {
-		server.Start()
+		srv.Start()
 	}()
 	time.Sleep(1 * time.Second) // Waiting for the server to start
 
@@ -429,7 +430,84 @@ func TestCopyFileConsoleCommandWithIncorrectHost(t *testing.T) {
 		t.Fatalf("result should be equals [no available hosts: [123.1.1.1 123.1.1.1]], but result is: [%s]", result.Lines[0].Fields[0])
 	}
 
-	server.Stop()
+	srv.Stop()
 	os.RemoveAll(config.Database.Path)
 	os.RemoveAll(TARGET_TEST_FILE_PATH)
+}
+
+// Start command
+
+func TestStartCommand(t *testing.T) {
+	config, _ := netfs.NewConfig()
+	os.RemoveAll(config.Database.Path)
+
+	go func() {
+		client, _ := console.NewConsoleClient(config)
+		command, _ := client.GetCommand("start")
+		if _, err := command.Execute(); err != nil {
+			panic(err)
+		}
+	}()
+	time.Sleep(1 * time.Second) // Waiting for the server to start
+
+	client, _ := console.NewConsoleClient(config)
+	command, _ := client.GetCommand("hosts")
+
+	_, err := command.Execute()
+	if err != nil {
+		t.Fatalf("error should be nil, but error is [%s]", err)
+	}
+}
+
+func TestStartCommandWhenServerStartedAlready(t *testing.T) {
+	config, _ := netfs.NewConfig()
+	os.RemoveAll(config.Database.Path)
+
+	srv, _ := server.NewServer(config)
+	go func() {
+		srv.Start()
+	}()
+	time.Sleep(1 * time.Second) // Waiting for the server to start
+
+	client, _ := console.NewConsoleClient(config)
+	command, _ := client.GetCommand("start")
+
+	_, err := command.Execute()
+	if err == nil {
+		t.Fatal("error should be not nil, but error is nil")
+	}
+}
+
+// Stop command
+
+func TestStopCommand(t *testing.T) {
+	config, _ := netfs.NewConfig()
+	os.RemoveAll(config.Database.Path)
+
+	srv, _ := server.NewServer(config)
+	go func() {
+		srv.Start()
+	}()
+	time.Sleep(1 * time.Second) // Waiting for the server to start
+
+	client, _ := console.NewConsoleClient(config)
+	command, _ := client.GetCommand("stop")
+
+	_, err := command.Execute()
+	if err != nil {
+		t.Fatalf("error should be nil, but error is [%s]", err)
+	}
+}
+
+func TestStopCommandWhenServerNotStarted(t *testing.T) {
+	config, _ := netfs.NewConfig()
+	os.RemoveAll(config.Database.Path)
+
+	client, _ := console.NewConsoleClient(config)
+	command, _ := client.GetCommand("stop")
+
+	_, err := command.Execute()
+	if err == nil {
+		t.Fatal("error should be not nil, but error is nil")
+	}
 }

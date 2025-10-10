@@ -155,7 +155,7 @@ func (cmd startServerConsoleCommand) Execute(args ...string) (ConsoleCommandResu
 	if err == nil {
 		var srv *server.Server
 		if srv, err = server.NewServer(config); err == nil {
-			srv.Start()
+			err = srv.Start()
 		}
 	}
 	return ConsoleCommandResult{}, err

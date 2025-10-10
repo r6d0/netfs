@@ -33,7 +33,7 @@ type Server struct {
 }
 
 // Start requests listening. It's blocking current thread.
-func (serv *Server) Start() {
+func (serv *Server) Start() error {
 	// Database connection
 	db, err := badger.Open(badger.DefaultOptions(serv.config.Database.Path))
 	serv.db = db
@@ -44,19 +44,21 @@ func (serv *Server) Start() {
 			// Execute async tasks.
 			executeCopyTask(serv)
 
-			err := serv.httpServer.ListenAndServe()
+			err = serv.httpServer.ListenAndServe()
 			if err != http.ErrServerClosed {
-				log.Fatalln(err) // TODO. Log format
+				serv.stop <- syscall.SIGINT
 			}
 		}()
 
 		// Stop signal waiting.
 		<-serv.stop
 
-		// HTTP server stopping.
-		err := serv.httpServer.Shutdown(context.Background())
-		if err != nil {
-			log.Fatalln(err) // TODO. Log format
+		if err == nil {
+			// HTTP server stopping.
+			err = serv.httpServer.Shutdown(context.Background())
+			if err != nil {
+				log.Fatalln(err) // TODO. Log format
+			}
 		}
 
 		// Tasks stopping.
@@ -67,6 +69,7 @@ func (serv *Server) Start() {
 			serv.db.Close()
 		}
 	}
+	return err
 }
 
 // Stop the running server.

@@ -3,6 +3,7 @@ package console
 import (
 	"fmt"
 	"net"
+	"net/http"
 	netfs "netfs/internal"
 	"netfs/internal/server"
 	"path/filepath"
@@ -10,7 +11,8 @@ import (
 	"strings"
 )
 
-// -------------------------------------------------------- PUBLIC CODE ---------------------------------------------------------
+const pathSeparator = "/"
+const pathSize = 2
 
 type ConsoleCommandResultLine struct {
 	Fields []string
@@ -50,17 +52,13 @@ func NewConsoleClient(config *netfs.Config) (ConsoleClient, error) {
 			fileInfoConsoleCommand{client: client},
 			copyFileConsoleCommand{client: client},
 			startServerConsoleCommand{client: client},
+			stopServerConsoleCommand{client: client},
 		}
 
 		return client, nil
 	}
 	return nil, err
 }
-
-// -------------------------------------------------------- PRIVATE CODE --------------------------------------------------------
-
-const PATH_SEPARATOR = "/"
-const PATH_SIZE = 2
 
 type consoleClient struct {
 	config   *netfs.Config
@@ -89,12 +87,40 @@ func (cmd stopServerConsoleCommand) GetName() string {
 
 // Returns information about command.
 func (cmd stopServerConsoleCommand) GetDescription() ConsoleCommandResult {
-	return ConsoleCommandResult{}
+	return ConsoleCommandResult{
+		[]ConsoleCommandResultLine{
+			{
+				Fields: []string{
+					"stop",
+					"",
+					"stops the netfs server",
+				},
+			},
+			{Fields: []string{"", "netfs stop", "stops the netfs server"}},
+		},
+	}
 }
 
 // Executes a command with arguments.
 func (cmd stopServerConsoleCommand) Execute(args ...string) (ConsoleCommandResult, error) {
-	return ConsoleCommandResult{}, nil
+	result := ConsoleCommandResult{}
+
+	host, err := cmd.client.network.GetLocalHost()
+	if err == nil {
+		var resp *http.Response
+		if resp, err = http.Get(host.GetURL(netfs.API.Stop)); err == nil {
+			if resp.StatusCode == http.StatusOK {
+				result = ConsoleCommandResult{Lines: []ConsoleCommandResultLine{{Fields: []string{"netfs server is stopped"}}}}
+			} else {
+				result = ConsoleCommandResult{
+					Lines: []ConsoleCommandResultLine{
+						{Fields: []string{fmt.Sprintf("netfs server is not stopped. reponse code: [%d]", resp.StatusCode)}},
+					},
+				}
+			}
+		}
+	}
+	return result, err
 }
 
 // The command starts netfs server.
@@ -113,28 +139,19 @@ func (cmd startServerConsoleCommand) GetDescription() ConsoleCommandResult {
 		[]ConsoleCommandResultLine{
 			{
 				Fields: []string{
-					"start [config.json]",
+					"start",
 					"",
-					"starts netfs server",
+					"starts the netfs server",
 				},
 			},
-			{Fields: []string{"", "netfs start", "starts the netfs server with the default configuration"}},
-			{Fields: []string{"", "netfs start /home/etc/config.json", "starts the netfs server with the configuration"}},
+			{Fields: []string{"", "netfs start", "starts the netfs server"}},
 		},
 	}
 }
 
 // Executes a command with arguments.
 func (cmd startServerConsoleCommand) Execute(args ...string) (ConsoleCommandResult, error) {
-	var err error
-	var config *netfs.Config
-
-	if len(args) > 0 {
-		config, err = netfs.NewConfig(args[0])
-	} else {
-		config, err = netfs.NewConfig()
-	}
-
+	config, err := netfs.NewConfig()
 	if err == nil {
 		var srv *server.Server
 		if srv, err = server.NewServer(config); err == nil {
@@ -180,8 +197,8 @@ func (cmd copyFileConsoleCommand) Execute(args ...string) (ConsoleCommandResult,
 		var hosts []netfs.RemoteHost
 		if hosts, err = cmd.client.network.GetHosts(); err == nil {
 			result = noAvailableHosts()
-			sourcePath := strings.SplitN(args[0], PATH_SEPARATOR, PATH_SIZE)
-			targetPath := strings.SplitN(args[1], PATH_SEPARATOR, PATH_SIZE)
+			sourcePath := strings.SplitN(args[0], pathSeparator, pathSize)
+			targetPath := strings.SplitN(args[1], pathSeparator, pathSize)
 
 			var sourceHost *netfs.RemoteHost
 			var targetHost *netfs.RemoteHost
@@ -258,8 +275,8 @@ func (cmd fileInfoConsoleCommand) Execute(args ...string) (ConsoleCommandResult,
 	result := unsupportedFormat()
 
 	if len(args) > 0 {
-		path := strings.SplitN(args[0], PATH_SEPARATOR, PATH_SIZE)
-		if len(path) == PATH_SIZE {
+		path := strings.SplitN(args[0], pathSeparator, pathSize)
+		if len(path) == pathSize {
 			var hosts []netfs.RemoteHost
 			if hosts, err = cmd.client.network.GetHosts(); err == nil {
 				result = noAvailableHosts()
@@ -370,21 +387,15 @@ func (cmd helpConsoleCommand) GetDescription() ConsoleCommandResult {
 
 // Executes a command with arguments.
 func (cmd helpConsoleCommand) Execute(args ...string) (ConsoleCommandResult, error) {
-	if len(args) > 0 {
-		if args[0] == cmd.GetName() {
-			return cmd.GetDescription(), nil
-		} else {
-			for _, command := range cmd.client.commands {
-				if args[0] == command.GetName() {
-					return command.GetDescription(), nil
-				}
-			}
-		}
-	}
-
-	result := ConsoleCommandResult{}
+	result := ConsoleCommandResult{Lines: []ConsoleCommandResultLine{{Fields: []string{"COMMAND", "EXAMPLE", "DESCRIPTION"}}}}
 	for _, command := range cmd.client.commands {
-		result.Lines = append(result.Lines, command.GetDescription().Lines...)
+		if len(args) > 0 && args[0] != cmd.GetName() {
+			if args[0] == command.GetName() {
+				result.Lines = append(result.Lines, command.GetDescription().Lines...)
+			}
+		} else {
+			result.Lines = append(result.Lines, command.GetDescription().Lines...)
+		}
 	}
 	return result, nil
 }

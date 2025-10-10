@@ -19,14 +19,21 @@ func main() {
 		var client console.ConsoleClient
 		if client, err = console.NewConsoleClient(config); err == nil {
 			name := "help"
-			if len(os.Args) > NAME_INDEX {
-				name = os.Args[NAME_INDEX]
+			args := os.Args
+			if len(args) > NAME_INDEX {
+				name = args[NAME_INDEX]
 			}
 
 			var command console.ConsoleCommand
 			if command, err = client.GetCommand(name); err == nil {
+				if len(args) > NAME_INDEX+1 {
+					args = args[NAME_INDEX+1:]
+				} else {
+					args = []string{}
+				}
+
 				var res console.ConsoleCommandResult
-				if res, err = command.Execute(os.Args[NAME_INDEX+1:]...); err == nil {
+				if res, err = command.Execute(args...); err == nil {
 					print(res)
 				}
 			}

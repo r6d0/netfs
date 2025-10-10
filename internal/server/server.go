@@ -94,6 +94,7 @@ func NewServer(config *netfs.Config) (*Server, error) {
 
 			// API Registration
 			mux := http.NewServeMux()
+			mux.HandleFunc(netfs.API.Stop, server.stopHandle)
 			mux.HandleFunc(netfs.API.Host, server.hostHandle)
 			mux.HandleFunc(netfs.API.FileInfo.URL, server.fileInfoHandle)
 			mux.HandleFunc(netfs.API.FileCreate.URL, server.fileCreateHandle)
@@ -105,6 +106,20 @@ func NewServer(config *netfs.Config) (*Server, error) {
 		}
 	}
 	return nil, err
+}
+
+// Stops the server.
+func (serv *Server) stopHandle(writer http.ResponseWriter, request *http.Request) {
+	if request.Method == http.MethodGet {
+		// Only from current host.
+		if strings.Contains(request.RemoteAddr, serv.host.IP.String()) {
+			serv.Stop()
+		} else {
+			writer.WriteHeader(http.StatusForbidden)
+		}
+	} else {
+		writer.WriteHeader(http.StatusMethodNotAllowed)
+	}
 }
 
 // Returns information about the current host.

@@ -4,6 +4,8 @@ import "net/http"
 
 // Server API.
 var API = struct {
+	// Stops the server.
+	Stop string
 	// Information about file.
 	FileInfo struct {
 		URL    string
@@ -32,26 +34,27 @@ var API = struct {
 		ContentType string
 	}
 }{
-	Host: "/do-sync/api/host",
+	Stop: "/netfs/api/server/stop",
+	Host: "/netfs/api/host",
 	FileInfo: struct {
 		URL    string
 		Method string
 		Path   string
-	}{URL: "/do-sync/api/file/info", Method: http.MethodGet, Path: "path"},
+	}{URL: "/netfs/api/file/info", Method: http.MethodGet, Path: "path"},
 	FileCreate: struct {
 		URL         string
 		Method      string
 		ContentType string
-	}{URL: "/do-sync/api/file/create", Method: http.MethodPost, ContentType: "application/octet-stream"},
+	}{URL: "/netfs/api/file/create", Method: http.MethodPost, ContentType: "application/octet-stream"},
 	FileWrite: struct {
 		URL         string
 		Method      string
 		ContentType string
 		Path        string
-	}{URL: "/do-sync/api/file/write", Method: http.MethodPost, Path: "path", ContentType: "application/octet-stream"},
+	}{URL: "/netfs/api/file/write", Method: http.MethodPost, Path: "path", ContentType: "application/octet-stream"},
 	FileCopyStart: struct {
 		URL         string
 		Method      string
 		ContentType string
-	}{URL: "/do-sync/api/file/copy/start", Method: http.MethodPost, ContentType: "application/octet-stream"},
+	}{URL: "/netfs/api/file/copy/start", Method: http.MethodPost, ContentType: "application/octet-stream"},
 }

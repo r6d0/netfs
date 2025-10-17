@@ -10,21 +10,20 @@ import (
 	"log"
 	"net/http"
 	netfs "netfs/internal"
+	"netfs/internal/store"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
-
-	"github.com/dgraph-io/badger/v4"
 )
 
 const portSeparator = ":"
 
 // HTTP server.
 type Server struct {
-	db         *badger.DB
+	db         store.Store
 	httpServer *http.Server
 	config     *netfs.Config
 	tasks      *_TasksContext
@@ -35,7 +34,7 @@ type Server struct {
 // Start requests listening. It's blocking current thread.
 func (serv *Server) Start() error {
 	// Database connection
-	db, err := badger.Open(badger.DefaultOptions(serv.config.Database.Path))
+	db, err := store.NewStore(&serv.config.Database)
 	serv.db = db
 
 	if err == nil {
@@ -103,6 +102,7 @@ func NewServer(config *netfs.Config) (*Server, error) {
 			mux.HandleFunc(netfs.API.FileCreate.URL, server.fileCreateHandle)
 			mux.HandleFunc(netfs.API.FileWrite.URL, server.fileWriteHandle)
 			mux.HandleFunc(netfs.API.FileCopyStart.URL, server.fileCopyStartHandle)
+			mux.HandleFunc(netfs.API.FileCopyStatus.URL, server.fileCopyStatusHandle)
 
 			server.httpServer = &http.Server{Addr: portSeparator + strconv.Itoa(int(config.Server.Port)), Handler: mux}
 			return server, nil
@@ -301,6 +301,29 @@ func (serv *Server) fileCopyStartHandle(writer http.ResponseWriter, request *htt
 
 			writer.Write([]byte(err.Error()))
 			writer.WriteHeader(http.StatusInternalServerError)
+		}
+	} else {
+		writer.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+// Returns information about copy operation.
+func (serv *Server) fileCopyStatusHandle(writer http.ResponseWriter, request *http.Request) {
+	api := netfs.API.FileCopyStatus
+	if request.Method == api.Method {
+		defer request.Body.Close()
+
+		query := request.URL.Query()
+		id := query.Get(api.Id)
+		status := query.Get(api.Status)
+
+		if id != "" {
+			// TODO. Search operations by id
+		} else if status != "" {
+			// TODO. Search operations by status
+		} else {
+			writer.Write([]byte("request must have [id] or [status] parameter"))
+			writer.WriteHeader(http.StatusBadRequest)
 		}
 	} else {
 		writer.WriteHeader(http.StatusMethodNotAllowed)

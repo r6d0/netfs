@@ -9,9 +9,8 @@ import (
 	"io"
 	"net/http"
 	netfs "netfs/internal"
+	"netfs/internal/store"
 	"os"
-
-	"github.com/dgraph-io/badger/v4"
 )
 
 const _COPY_TASK = "task.copy."
@@ -29,7 +28,7 @@ const (
 
 // Asynchronous task for files copying.
 type copyTask struct {
-	db         *badger.DB
+	db         store.Store
 	context    context.Context
 	callback   chan copyTaskStatus
 	bufferSize uint64
@@ -43,13 +42,11 @@ type copyTask struct {
 
 // Saves task to database.
 func (task *copyTask) Save() error {
-	return task.db.Update(func(txn *badger.Txn) error {
-		data, err := json.Marshal(*task)
-		if err == nil {
-			err = txn.Set(task.Id, data)
-		}
-		return err
-	})
+	data, err := json.Marshal(*task)
+	if err == nil {
+		task.db.Set(task.Id, data)
+	}
+	return err
 }
 
 // Starts the copying process.
@@ -65,7 +62,7 @@ func (task *copyTask) Process() {
 	}
 	task.callback <- task.Status
 
-	fmt.Println("ERROR: ", err)
+	fmt.Println("ERROR: ", err) // TODO. Log format
 }
 
 // Copy directory to remote host.
@@ -152,36 +149,24 @@ func executeCopyTask(serv *Server) {
 			case <-callback:
 				count++
 			default:
-				err = serv.db.View(func(txn *badger.Txn) error {
-					var err error
+				var items [][]byte
+				if items, err = serv.db.All(prefix, count); err == nil { // TODO. need refactoring
+					for _, item := range items {
+						task := &copyTask{}
+						if err = json.Unmarshal(item, task); err == nil && task.Status <= delayed {
+							task.db = serv.db
+							task.context = ctx
+							task.callback = callback
+							task.bufferSize = serv.config.BufferSize
+							task.Status = running
+							task.Save()
 
-					it := txn.NewIterator(badger.DefaultIteratorOptions)
-					defer it.Close()
-
-					for it.Seek(prefix); err == nil && it.ValidForPrefix(prefix) && count > 0; it.Next() {
-						item := it.Item()
-
-						var data []byte
-						if data, err = item.ValueCopy(make([]byte, item.ValueSize())); err == nil {
-							task := &copyTask{}
-							if err = json.Unmarshal(data, task); err == nil && task.Status <= delayed {
-								fmt.Println(string(item.Key()))
-
-								task.db = serv.db
-								task.context = ctx
-								task.callback = callback
-								task.bufferSize = serv.config.BufferSize
-								task.Status = running
-								task.Save()
-
-								fmt.Println("TASK: ", task.Source)
-								go task.Process()
-								count--
-							}
+							fmt.Println("TASK: ", task.Source)
+							go task.Process()
+							count--
 						}
 					}
-					return err
-				})
+				}
 			}
 		}
 	}(serv.tasks._Context)

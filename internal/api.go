@@ -33,6 +33,13 @@ var API = struct {
 		Method      string
 		ContentType string
 	}
+	// Starting a file or directory copy operation.
+	FileCopyStatus struct {
+		URL    string
+		Method string
+		Id     string
+		Status string
+	}
 }{
 	Stop: "/netfs/api/server/stop",
 	Host: "/netfs/api/host",
@@ -57,4 +64,10 @@ var API = struct {
 		Method      string
 		ContentType string
 	}{URL: "/netfs/api/file/copy/start", Method: http.MethodPost, ContentType: "application/octet-stream"},
+	FileCopyStatus: struct {
+		URL    string
+		Method string
+		Id     string
+		Status string
+	}{URL: "/netfs/api/file/copy/status", Method: http.MethodGet, Id: "id", Status: "status"},
 }

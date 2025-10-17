@@ -149,24 +149,25 @@ func executeCopyTask(serv *Server) {
 			case <-callback:
 				count++
 			default:
-				var items [][]byte
-				if items, err = serv.db.All(prefix, count); err == nil { // TODO. need refactoring
-					for _, item := range items {
-						task := &copyTask{}
-						if err = json.Unmarshal(item, task); err == nil && task.Status <= delayed {
-							task.db = serv.db
-							task.context = ctx
-							task.callback = callback
-							task.bufferSize = serv.config.BufferSize
-							task.Status = running
-							task.Save()
+				fmt.Println(prefix)
+				// var items [][]byte
+				// if items, err = serv.db.All(prefix, count); err == nil { // TODO. need refactoring
+				// 	for _, item := range items {
+				// 		task := &copyTask{}
+				// 		if err = json.Unmarshal(item, task); err == nil && task.Status <= delayed {
+				// 			task.db = serv.db
+				// 			task.context = ctx
+				// 			task.callback = callback
+				// 			task.bufferSize = serv.config.BufferSize
+				// 			task.Status = running
+				// 			task.Save()
 
-							fmt.Println("TASK: ", task.Source)
-							go task.Process()
-							count--
-						}
-					}
-				}
+				// 			fmt.Println("TASK: ", task.Source)
+				// 			go task.Process()
+				// 			count--
+				// 		}
+				// 	}
+				// }
 			}
 		}
 	}(serv.tasks._Context)

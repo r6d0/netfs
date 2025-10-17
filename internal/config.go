@@ -28,6 +28,8 @@ type DatabaseConfig struct {
 	Path string `json:"path"`
 }
 
+type TaskConfig struct{}
+
 // netfs configuration.
 type Config struct {
 	// Server configuration.

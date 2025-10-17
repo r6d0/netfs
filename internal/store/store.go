@@ -1,31 +1,35 @@
 package store
 
 import (
-	"io"
-	netfs "netfs/internal"
-
 	"github.com/dgraph-io/badger/v4"
 )
+
+type StoreConfig struct {
+	Path string
+}
+
+type StoreItem struct {
+	Key   []byte
+	Value []byte
+}
 
 type Store interface {
 	Get([]byte) ([]byte, error)
 	Set([]byte, []byte) error
 	Del([]byte) error
-	All([]byte, uint64) ([][]byte, error)
+	All([]byte, uint64) ([]StoreItem, error)
 
-	io.Closer
+	Start() error
+	Stop() error
 }
 
-func NewStore(config *netfs.DatabaseConfig) (Store, error) {
-	db, err := badger.Open(badger.DefaultOptions(config.Path))
-	if err == nil {
-		return &store{db: db}, nil
-	}
-	return nil, err
+func NewStore(config StoreConfig) Store {
+	return &store{config: config}
 }
 
 type store struct {
-	db *badger.DB
+	db     *badger.DB
+	config StoreConfig
 }
 
 func (st *store) Get(key []byte) ([]byte, error) {
@@ -54,8 +58,8 @@ func (st *store) Del(key []byte) error {
 	})
 }
 
-func (st *store) All(prefix []byte, count uint64) ([][]byte, error) {
-	result := [][]byte{}
+func (st *store) All(prefix []byte, count uint64) ([]StoreItem, error) {
+	result := []StoreItem{}
 	return result, st.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
@@ -64,15 +68,29 @@ func (st *store) All(prefix []byte, count uint64) ([][]byte, error) {
 		for it.Seek(prefix); err == nil && it.ValidForPrefix(prefix) && count > 0; it.Next() {
 			item := it.Item()
 
-			var data []byte
-			if data, err = item.ValueCopy(make([]byte, item.ValueSize())); err == nil {
-				result = append(result, data)
+			var value []byte
+			if value, err = item.ValueCopy(make([]byte, item.ValueSize())); err == nil {
+				result = append(result, StoreItem{Key: item.Key(), Value: value})
 			}
 		}
 		return err
 	})
 }
 
-func (st *store) Close() error {
-	return st.db.Close()
+func (st *store) Start() error {
+	if st.db == nil {
+		db, err := badger.Open(badger.DefaultOptions(st.config.Path))
+		if err == nil {
+			st.db = db
+		}
+		return err
+	}
+	return nil
+}
+
+func (st *store) Stop() error {
+	if st.db != nil {
+		return st.db.Close()
+	}
+	return nil
 }

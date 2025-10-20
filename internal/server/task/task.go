@@ -2,9 +2,12 @@ package task
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	netfs "netfs/internal"
 	"netfs/internal/logger"
 	"netfs/internal/store"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -15,7 +18,12 @@ import (
 const collName = "task"
 const collSep = "."
 
+type TaskCopyConfig struct {
+	BufferSize uint64
+}
+
 type TaskConfig struct {
+	Copy               TaskCopyConfig
 	MaxAvailableTasks  uint64
 	TasksWaitingSecond uint64
 }
@@ -36,11 +44,21 @@ const (
 	Copy TaskType = iota
 )
 
+type TaskProcessContext struct {
+	Log      *logger.Logger
+	DB       store.Store
+	Config   TaskConfig
+	Cancel   chan bool
+	Complete chan string
+}
+
 type Task interface {
 	Id() string
-	Process(chan bool, chan string) error
-	Status() TaskStatus
-	Type() TaskType
+	Process(TaskProcessContext) error
+	ToWaiting() (store.StoreItem, error)
+	ToRunning() (store.StoreItem, error)
+	ToFailed(error) (store.StoreItem, error)
+	ToCompleted() (store.StoreItem, error)
 }
 
 type TaskExecutor interface {
@@ -57,37 +75,139 @@ func NewTaskExecutor(config TaskConfig, db store.Store, log *logger.Logger) (Tas
 func NewCopyTask(source netfs.RemoteFile, target netfs.RemoteFile) (Task, error) {
 	task := taskCopy{Source: source, Target: target}
 	task.TaskId = uuid.NewString()
-	task.TaskStatus = Waiting
-	task.TaskType = Copy
+	task.Status = Waiting
+	task.Type = Copy
 
 	return &task, nil
 }
 
 // The task of copying the file.
 type taskCopy struct {
-	TaskId     string
-	TaskStatus TaskStatus
-	TaskType   TaskType
-	Offset     uint64
-	Source     netfs.RemoteFile
-	Target     netfs.RemoteFile
-	Error      string
+	TaskId string
+	Status TaskStatus
+	Type   TaskType
+	Offset uint64
+	Source netfs.RemoteFile
+	Target netfs.RemoteFile
+	Error  string
 }
 
 func (task taskCopy) Id() string {
 	return task.TaskId
 }
 
-func (*taskCopy) Process(cancel chan bool, complete chan string) error {
+func (task *taskCopy) Process(ctx TaskProcessContext) error {
+	go func() {
+		log := ctx.Log
+		cancel := ctx.Cancel
+		db := ctx.DB
+		config := ctx.Config.Copy
+
+		var err error
+		var file *os.File
+		var size int
+		var packages uint64
+		var buffer []byte
+		var item store.StoreItem
+
+		end := false
+		cancelled := false
+		for !end && !cancelled && err == nil {
+			select {
+			case cancelled = <-cancel:
+				if cancelled {
+					log.Info("task: [%s] is cancelled", task.Id())
+				}
+			default:
+				target := task.Target
+				if target.Type == netfs.DIRECTORY {
+					log.Info("task: [%s] is running", task.Id())
+
+					end = true
+					err = target.Create()
+				} else {
+					source := task.Source
+
+					if file == nil {
+						log.Info("task: [%s] is running", task.Id())
+
+						if file, err = os.Open(source.Path); err == nil {
+							log.Info("task: [%s]. file: [%s] is opened", task.Id(), source.Path)
+							defer file.Close()
+
+							var info os.FileInfo
+							if info, err = file.Stat(); err == nil {
+								fileSize := uint64(info.Size())
+								bufferSize := min(fileSize, config.BufferSize)
+								if fileSize > 0 && bufferSize > 0 {
+									packages = fileSize / bufferSize
+									buffer = make([]byte, bufferSize)
+								}
+								log.Info("task: [%s]. file: [%s] has [%d] packages to send", task.Id(), source.Path, packages)
+							}
+						}
+					} else {
+						if size, err = file.Read(buffer); err == nil {
+							if err = target.Write(buffer[:size]); err == nil {
+								task.Offset += uint64(size)
+
+								packages--
+								log.Info("task: [%s]. package of file: [%s] has been sent. [%d] left", task.Id(), source.Path, packages)
+							}
+						} else if errors.Is(err, io.EOF) {
+							end = true
+							err = nil
+						}
+					}
+				}
+
+			}
+
+			if err == nil {
+				if item, err = task.ToRunning(); err == nil {
+					err = db.Set(item)
+				}
+			}
+		}
+
+		if end && err == nil { // completed
+			if item, err = task.ToCompleted(); err == nil {
+				if err = db.Set(item); err == nil {
+					log.Info("task: [%s] is completed", task.Id())
+				}
+			}
+		} else if cancelled && err == nil { // cancelled
+			if item, err = task.ToRunning(); err == nil {
+				err = db.Set(item)
+			}
+		}
+
+		if err != nil {
+			if item, err = task.ToFailed(err); err == nil {
+				err = errors.Join(err, db.Set(item))
+			}
+
+			log.Error("task: [%s] is failed: [%s]", task.Id(), err.Error())
+		}
+		ctx.Complete <- task.Id()
+	}()
 	return nil
 }
 
-func (task *taskCopy) Status() TaskStatus {
-	return task.TaskStatus
+func (task *taskCopy) ToWaiting() (store.StoreItem, error) {
+	return store.StoreItem{}, nil // TODO. Add logic
 }
 
-func (task *taskCopy) Type() TaskType {
-	return task.TaskType
+func (task *taskCopy) ToRunning() (store.StoreItem, error) {
+	return store.StoreItem{}, nil // TODO. Add logic
+}
+
+func (task *taskCopy) ToFailed(err error) (store.StoreItem, error) {
+	return store.StoreItem{}, nil // TODO. Add logic
+}
+
+func (task *taskCopy) ToCompleted() (store.StoreItem, error) {
+	return store.StoreItem{}, nil // TODO. Add logic
 }
 
 type taskExecutor struct {
@@ -99,20 +219,21 @@ type taskExecutor struct {
 
 func (exec *taskExecutor) Submit(task Task) error {
 	log := exec.log
-	taskType := strconv.Itoa(int(task.Type()))
-	taskStatus := strconv.Itoa(int(task.Status()))
+	db := exec.db
 
-	key := strings.Join([]string{collName, taskStatus, taskType, task.Id()}, collSep)
-	log.Info("submit task key: [%s]", key)
-
-	value, err := json.Marshal(task)
+	item, err := task.ToWaiting()
 	if err == nil {
-		log.Info("submit task value: [%s]", string(value))
-		err = exec.db.Set([]byte(key), value)
+		err = db.Set(item)
+		if err == nil {
+			item.Key = []byte(strings.Join([]string{collName, task.Id()}, collSep))
+			err = db.Set(item)
+		}
 	}
 
 	if err != nil {
-		log.Error("submit task error: [%s]", err.Error())
+		log.Error("task: [%s] is failed: [%s]", task.Id(), err.Error())
+	} else {
+		log.Info("task: [%s] is waiting", task.Id())
 	}
 	return err
 }
@@ -127,6 +248,7 @@ func (exec *taskExecutor) Start() error {
 		prefix := strings.Join([]string{collName, strconv.Itoa(int(Waiting))}, collSep)
 		available := maxAvailableTasks
 		complete := make(chan string)
+		ctx := TaskProcessContext{Log: exec.log, Cancel: cancel, Complete: complete}
 
 		cancelled := false
 		for {
@@ -166,7 +288,9 @@ func (exec *taskExecutor) Start() error {
 
 								if err = json.Unmarshal(item.Value, task); err == nil {
 									exec.log.Info("task: [%s] has data: [%s]", key, task)
-									err = task.Process(cancel, complete)
+									if err = task.Process(ctx); err == nil {
+										err = exec.db.Del(item.Key)
+									}
 								}
 							}
 

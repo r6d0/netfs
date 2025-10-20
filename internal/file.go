@@ -32,6 +32,14 @@ type RemoteFile struct {
 	client *http.Client
 }
 
+func (file *RemoteFile) Create() error {
+	return nil // TODO. Add logic
+}
+
+func (file *RemoteFile) Write(data []byte) error {
+	return nil // TODO. Add logic
+}
+
 // Copies file to target.
 func (file *RemoteFile) CopyTo(target *RemoteFile) error {
 	data, err := json.Marshal([]RemoteFile{*file, *target})

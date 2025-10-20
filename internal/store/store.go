@@ -15,7 +15,7 @@ type StoreItem struct {
 
 type Store interface {
 	Get([]byte) ([]byte, error)
-	Set([]byte, []byte) error
+	Set(StoreItem) error
 	Del([]byte) error
 	All([]byte, uint64) ([]StoreItem, error)
 
@@ -46,9 +46,9 @@ func (st *store) Get(key []byte) ([]byte, error) {
 	})
 }
 
-func (st *store) Set(key []byte, value []byte) error {
+func (st *store) Set(item StoreItem) error {
 	return st.db.Update(func(txn *badger.Txn) error {
-		return txn.Set(key, value)
+		return txn.Set(item.Key, item.Value)
 	})
 }
 

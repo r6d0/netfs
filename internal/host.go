@@ -2,6 +2,7 @@ package netfs
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -14,6 +15,8 @@ const paramValue = "="
 const paramNext = "&"
 const protocolSeparator = "://"
 const portSeparator = ":"
+
+var UnavailableHost = errors.New("host is unavailable")
 
 // Information about host.
 type RemoteHost struct {

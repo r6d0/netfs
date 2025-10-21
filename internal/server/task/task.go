@@ -195,19 +195,36 @@ func (task *taskCopy) Process(ctx TaskProcessContext) error {
 }
 
 func (task *taskCopy) ToWaiting() (store.StoreItem, error) {
-	return store.StoreItem{}, nil // TODO. Add logic
+	task.Status = Waiting
+	value, err := json.Marshal(task)
+
+	key := strings.Join([]string{collName, strconv.Itoa(int(task.Status)), task.Id()}, collSep)
+	return store.StoreItem{Key: []byte(key), Value: value}, err
 }
 
 func (task *taskCopy) ToRunning() (store.StoreItem, error) {
-	return store.StoreItem{}, nil // TODO. Add logic
+	task.Status = Running
+	value, err := json.Marshal(task)
+
+	key := strings.Join([]string{collName, strconv.Itoa(int(task.Status)), task.Id()}, collSep)
+	return store.StoreItem{Key: []byte(key), Value: value}, err
 }
 
-func (task *taskCopy) ToFailed(err error) (store.StoreItem, error) {
-	return store.StoreItem{}, nil // TODO. Add logic
+func (task *taskCopy) ToFailed(original error) (store.StoreItem, error) {
+	task.Status = Failed
+	task.Error = original.Error()
+	value, err := json.Marshal(task)
+
+	key := strings.Join([]string{collName, strconv.Itoa(int(task.Status)), task.Id()}, collSep)
+	return store.StoreItem{Key: []byte(key), Value: value}, errors.Join(err, original)
 }
 
 func (task *taskCopy) ToCompleted() (store.StoreItem, error) {
-	return store.StoreItem{}, nil // TODO. Add logic
+	task.Status = Completed
+	value, err := json.Marshal(task)
+
+	key := strings.Join([]string{collName, strconv.Itoa(int(task.Status)), task.Id()}, collSep)
+	return store.StoreItem{Key: []byte(key), Value: value}, err
 }
 
 type taskExecutor struct {

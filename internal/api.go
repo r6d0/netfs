@@ -14,7 +14,7 @@ var API = struct {
 	}
 	// Information about host.
 	Host string
-	// Create directory.
+	// Create file or directory.
 	FileCreate struct {
 		URL         string
 		Method      string
@@ -58,7 +58,7 @@ var API = struct {
 		Method      string
 		ContentType string
 		Path        string
-	}{URL: "/netfs/api/file/write", Method: http.MethodPost, Path: "path", ContentType: "application/octet-stream"},
+	}{URL: "/netfs/api/file/write", Method: http.MethodPost, ContentType: "application/octet-stream", Path: "path"},
 	FileCopyStart: struct {
 		URL         string
 		Method      string

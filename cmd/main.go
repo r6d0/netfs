@@ -1,70 +1,65 @@
 package main
 
 import (
-	"fmt"
 	_ "net/http/pprof"
-	netfs "netfs/internal"
-	"netfs/internal/console"
-	"os"
-	"strconv"
 )
 
 const NAME_INDEX = 1
 
 func main() {
-	var err error
-	var config *netfs.Config
+	// var err error
+	// var config *netfs.Config
 
-	if config, err = netfs.NewConfig(); err == nil {
-		var client console.ConsoleClient
-		if client, err = console.NewConsoleClient(config); err == nil {
-			name := "help"
-			args := os.Args
-			if len(args) > NAME_INDEX {
-				name = args[NAME_INDEX]
-			}
+	// if config, err = netfs.NewConfig(); err == nil {
+	// 	var client console.ConsoleClient
+	// 	if client, err = console.NewConsoleClient(config); err == nil {
+	// 		name := "help"
+	// 		args := os.Args
+	// 		if len(args) > NAME_INDEX {
+	// 			name = args[NAME_INDEX]
+	// 		}
 
-			var command console.ConsoleCommand
-			if command, err = client.GetCommand(name); err == nil {
-				if len(args) > NAME_INDEX+1 {
-					args = args[NAME_INDEX+1:]
-				} else {
-					args = []string{}
-				}
+	// 		var command console.ConsoleCommand
+	// 		if command, err = client.GetCommand(name); err == nil {
+	// 			if len(args) > NAME_INDEX+1 {
+	// 				args = args[NAME_INDEX+1:]
+	// 			} else {
+	// 				args = []string{}
+	// 			}
 
-				var res console.ConsoleCommandResult
-				if res, err = command.Execute(args...); err == nil {
-					print(res)
-				}
-			}
-		}
-	}
+	// 			var res console.ConsoleCommandResult
+	// 			if res, err = command.Execute(args...); err == nil {
+	// 				print(res)
+	// 			}
+	// 		}
+	// 	}
+	// }
 
-	if err != nil {
-		panic(err)
-	}
+	// if err != nil {
+	// 	panic(err)
+	// }
 }
 
-func print(result console.ConsoleCommandResult) {
-	maxFieldSize := []int{0}
-	for _, line := range result.Lines {
-		for index, field := range line.Fields {
-			if index >= len(maxFieldSize) {
-				maxFieldSize = append(maxFieldSize, 0)
-			}
-			maxFieldSize[index] = max(maxFieldSize[index], len(field))
-		}
-	}
+// func print(result console.ConsoleCommandResult) {
+// 	maxFieldSize := []int{0}
+// 	for _, line := range result.Lines {
+// 		for index, field := range line.Fields {
+// 			if index >= len(maxFieldSize) {
+// 				maxFieldSize = append(maxFieldSize, 0)
+// 			}
+// 			maxFieldSize[index] = max(maxFieldSize[index], len(field))
+// 		}
+// 	}
 
-	for _, line := range result.Lines {
-		for index, size := range maxFieldSize {
-			value := ""
-			if index < len(line.Fields) {
-				value = line.Fields[index]
-			}
-			fmt.Printf("%-"+strconv.Itoa(size)+"s", value)
-			fmt.Print(" ")
-		}
-		fmt.Println()
-	}
-}
+// 	for _, line := range result.Lines {
+// 		for index, size := range maxFieldSize {
+// 			value := ""
+// 			if index < len(line.Fields) {
+// 				value = line.Fields[index]
+// 			}
+// 			fmt.Printf("%-"+strconv.Itoa(size)+"s", value)
+// 			fmt.Print(" ")
+// 		}
+// 		fmt.Println()
+// 	}
+// }

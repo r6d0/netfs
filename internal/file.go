@@ -1,9 +1,7 @@
 package netfs
 
 import (
-	"bytes"
-	"encoding/json"
-	"net/http"
+	"netfs/internal/transport"
 )
 
 // Type of file.
@@ -24,28 +22,24 @@ func (fileType RemoteFileType) String() string {
 
 // Information about file.
 type RemoteFile struct {
-	Host   RemoteHost
-	Name   string
-	Path   string
-	Type   RemoteFileType
-	Size   uint64
-	client *http.Client
+	Host     RemoteHost
+	Name     string
+	Path     string
+	FileType RemoteFileType
+	Size     uint64
 }
 
-func (file *RemoteFile) Create() error {
-	return nil // TODO. Add logic
+// Writes data to remote file.
+func (file RemoteFile) Write(client transport.Transport, data []byte) error {
+	return client.SendRawBody(file.Host.IP, API.FileWrite.URL, data)
 }
 
-func (file *RemoteFile) Write(data []byte) error {
-	return nil // TODO. Add logic
+// Creates file or directory on remote host.
+func (file RemoteFile) Create(client transport.Transport) error {
+	return client.SendBody(file.Host.IP, API.FileCreate.URL, file)
 }
 
-// Copies file to target.
-func (file *RemoteFile) CopyTo(target *RemoteFile) error {
-	data, err := json.Marshal([]RemoteFile{*file, *target})
-	if err == nil {
-		host := target.Host
-		_, err = file.client.Post(host.GetURL(API.FileCopyStart.URL), API.FileCopyStart.ContentType, bytes.NewReader(data))
-	}
-	return err
+// Copies the current file to the target file.
+func (file RemoteFile) CopyTo(client transport.Transport, target RemoteFile) error {
+	return client.SendBody(file.Host.IP, API.FileCopyStart.URL, []RemoteFile{file, target})
 }

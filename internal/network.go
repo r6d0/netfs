@@ -1,15 +1,12 @@
 package netfs
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
 	"net"
-	"net/http"
 	"net/netip"
+	"netfs/internal/transport"
 	"os"
-	"strconv"
 	"strings"
+	"time"
 )
 
 const cidrEnd = "1.0/24"
@@ -17,10 +14,17 @@ const udpProtocol = "udp"
 const udpHost = "1.1.1.1:80"
 const ipSeparator = "."
 
+// Network configuration.
+type NetworkConfig struct {
+	Port     uint16
+	Protocol transport.TransportProtocol
+	Timeout  time.Duration
+}
+
 // Network operations.
 type Network struct {
-	config *Config
-	client *http.Client
+	config NetworkConfig
+	client transport.Transport
 }
 
 // Get information about available hosts.
@@ -48,19 +52,9 @@ func (network *Network) GetHosts() ([]RemoteHost, error) {
 
 // Gets information about host by IP.
 func (network *Network) GetHost(ip net.IP) (*RemoteHost, error) {
-	url := getRemoteHostURL(network.config.Server.Protocol, ip, int(network.config.Server.Port), API.Host)
-	res, err := network.client.Get(url)
+	res, err := network.client.SendAndReceive(ip, API.Host, &RemoteHost{})
 	if err == nil {
-		defer res.Body.Close()
-
-		var data []byte
-		if data, err = io.ReadAll(res.Body); err == nil {
-			var host *RemoteHost = &RemoteHost{client: network.client}
-
-			if err = json.Unmarshal(data, host); err == nil {
-				return host, nil
-			}
-		}
+		return res.(*RemoteHost), nil
 	}
 	return nil, err
 }
@@ -83,9 +77,7 @@ func (network *Network) GetLocalHost() (*RemoteHost, error) {
 
 	if ip, err = network.GetLocalIP(); err == nil {
 		if hostname, err = os.Hostname(); err == nil {
-			port := network.config.Server.Port
-			protocol := network.config.Server.Protocol
-			return &RemoteHost{Name: hostname, IP: ip, URL: getRemoteHostURL(strings.ToLower(protocol), ip, int(port), "")}, nil
+			return &RemoteHost{Name: hostname, IP: ip}, nil
 		}
 	}
 	return nil, err
@@ -118,34 +110,7 @@ func (network *Network) GetIPs() ([]net.IP, error) {
 }
 
 // Creates a new instance of Network, returns an error if creation failed.
-func NewNetwork(config *Config) (*Network, error) {
-	return &Network{config: config, client: &http.Client{Timeout: config.Client.Timeout}}, nil
-}
-
-// Gets host url in format - [protocol]://[ip]:[port]/
-func getRemoteHostURL(protocol string, ip net.IP, port int, path string, params ...any) string {
-	buffer := strings.Builder{}
-	buffer.WriteString(strings.ToLower(protocol))
-	buffer.WriteString(protocolSeparator)
-	buffer.WriteString(ip.String())
-	buffer.WriteString(portSeparator)
-	buffer.WriteString(strconv.Itoa(port))
-
-	if len(path) > 0 {
-		buffer.WriteString(path)
-	}
-
-	if len(params) > 0 {
-		buffer.WriteString(paramStart)
-		for index := range params {
-			buffer.WriteString(fmt.Sprint(params[index]))
-			buffer.WriteString(paramValue)
-			buffer.WriteString(fmt.Sprint(params[index+1]))
-
-			if index < len(params)-1 {
-				buffer.WriteString(paramNext)
-			}
-		}
-	}
-	return buffer.String()
+func NewNetwork(config NetworkConfig) (Network, error) {
+	client, err := transport.NewTransport(config.Protocol, config.Port, config.Timeout)
+	return Network{config: config, client: client}, err
 }

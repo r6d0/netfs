@@ -3,6 +3,8 @@ package transport
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -12,9 +14,6 @@ import (
 
 const ContentType = "Content-Type"
 const httpProtocol = "http"
-const paramStart = "?"
-const paramValue = "="
-const paramNext = "&"
 const protocolSeparator = "://"
 const portSeparator = ":"
 
@@ -58,7 +57,7 @@ func (tr *HttpTransport) SendBodyAndReceive(ip net.IP, path string, body any, re
 
 // Sends request with raw body and receives response.
 func (tr *HttpTransport) SendRawBodyAndReceive(ip net.IP, path string, body []byte, result any) (any, error) {
-	var reader *bytes.Reader
+	var reader io.Reader
 	if body != nil {
 		reader = bytes.NewReader(body)
 	}
@@ -69,11 +68,15 @@ func (tr *HttpTransport) SendRawBodyAndReceive(ip net.IP, path string, body []by
 		if res, err = tr.client.Do(req); err == nil {
 			defer res.Body.Close()
 
-			if result != nil {
-				var data []byte
-				if data, err = io.ReadAll(res.Body); err == nil {
-					return result, json.Unmarshal(data, result)
+			if res.StatusCode == http.StatusOK {
+				if result != nil {
+					var data []byte
+					if data, err = io.ReadAll(res.Body); err == nil {
+						return result, json.Unmarshal(data, result)
+					}
 				}
+			} else {
+				err = errors.Join(UnexpectedAnswer, fmt.Errorf("status code is [%d]", res.StatusCode))
 			}
 		}
 	}

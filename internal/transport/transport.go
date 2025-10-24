@@ -10,6 +10,9 @@ import (
 // Returns if the protocol is not supporting.
 var UnsupportedProtocol = errors.New("unsupported protocol")
 
+// eturns if the response was unexpected.
+var UnexpectedAnswer = errors.New("unexpected answer")
+
 // Available protocols.
 type TransportProtocol uint16
 

@@ -1,4 +1,4 @@
-package netfs
+package api
 
 import (
 	"netfs/internal/transport"
@@ -31,15 +31,15 @@ type RemoteFile struct {
 
 // Writes data to remote file.
 func (file RemoteFile) Write(client transport.Transport, data []byte) error {
-	return client.SendRawBody(file.Host.IP, API.FileWrite.URL, data)
+	return client.SendRawBody(file.Host.IP, API.FileWrite, data)
 }
 
 // Creates file or directory on remote host.
 func (file RemoteFile) Create(client transport.Transport) error {
-	return client.SendBody(file.Host.IP, API.FileCreate.URL, file)
+	return client.SendBody(file.Host.IP, API.FileCreate, file)
 }
 
 // Copies the current file to the target file.
 func (file RemoteFile) CopyTo(client transport.Transport, target RemoteFile) error {
-	return client.SendBody(file.Host.IP, API.FileCopyStart.URL, []RemoteFile{file, target})
+	return client.SendBody(file.Host.IP, API.FileCopyStart, []RemoteFile{file, target})
 }

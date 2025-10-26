@@ -1,7 +1,7 @@
 package api
 
 import (
-	"netfs/internal/transport"
+	"netfs/internal/api/transport"
 )
 
 // Type of file.

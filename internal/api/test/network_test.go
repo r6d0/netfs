@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"netfs/internal/api"
-	"netfs/internal/transport"
+	"netfs/internal/api/transport"
 	"os"
 	"strconv"
 	"testing"
@@ -100,7 +100,7 @@ func TestGetHostResponseError(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	_, err := network.GetHost(local.IP)
-	if !errors.Is(err, transport.UnexpectedAnswer) {
+	if !errors.Is(err, transport.ErrUnexpectedAnswer) {
 		t.Fatalf("error should be [transport.UnexpectedAnswer], but error is [%s]", err)
 	}
 }

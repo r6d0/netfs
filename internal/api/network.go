@@ -1,17 +1,19 @@
 package api
 
 import (
+	"errors"
 	"net"
 	"net/netip"
-	"netfs/internal/transport"
+	"netfs/internal/api/transport"
 	"os"
 	"strings"
 	"time"
 )
 
+var ErrLocalIPNotFound = errors.New("local IP address not found")
+var RFC1918 = []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}
+
 const cidrEnd = "1.0/24"
-const udpProtocol = "udp"
-const udpHost = "1.1.1.1:80"
 const ipSeparator = "."
 
 // Network configuration.
@@ -101,17 +103,38 @@ func (network *Network) Transport() transport.Transport {
 
 // Creates a new instance of Network, returns an error if creation failed.
 func NewNetwork(config NetworkConfig) (*Network, error) {
-	connection, err := net.Dial(udpProtocol, udpHost)
-	if connection != nil {
-		defer connection.Close()
-		ip := connection.LocalAddr().(*net.UDPAddr).IP
-
-		var hostname string
-		if hostname, err = os.Hostname(); err == nil {
-			var client transport.Transport
-			if client, err = transport.NewTransport(config.Protocol, config.Port, config.Timeout); err == nil {
-				return &Network{config: config, client: client, host: RemoteHost{Name: hostname, IP: ip}}, nil
+	addrs, err := net.InterfaceAddrs()
+	if err == nil {
+		var ips []net.IP
+		for _, a := range addrs {
+			if val, ok := a.(*net.IPAddr); ok {
+				ips = append(ips, val.IP)
+			} else if val, ok := a.(*net.IPNet); ok {
+				ips = append(ips, val.IP)
 			}
+		}
+
+		var localIP net.IP
+		for _, cidr := range RFC1918 {
+			_, block, _ := net.ParseCIDR(cidr)
+			for _, ip := range ips {
+				if block.Contains(ip) {
+					localIP = ip
+					break
+				}
+			}
+		}
+
+		if localIP != nil {
+			var hostname string
+			if hostname, err = os.Hostname(); err == nil {
+				var client transport.Transport
+				if client, err = transport.NewTransport(config.Protocol, config.Port, config.Timeout); err == nil {
+					return &Network{config: config, client: client, host: RemoteHost{Name: hostname, IP: localIP}}, nil
+				}
+			}
+		} else {
+			err = ErrLocalIPNotFound
 		}
 	}
 	return nil, err

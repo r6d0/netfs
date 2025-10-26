@@ -2,7 +2,7 @@ package api
 
 import (
 	"net"
-	"netfs/internal/transport"
+	"netfs/internal/api/transport"
 )
 
 // Information about host.

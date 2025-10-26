@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"netfs/internal/api"
-	"netfs/internal/transport"
+	"netfs/internal/api/transport"
 	"strconv"
 	"testing"
 	"time"

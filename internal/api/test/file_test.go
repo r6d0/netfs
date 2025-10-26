@@ -1,0 +1,200 @@
+package api_test
+
+import (
+	"encoding/json"
+	"net/http"
+	"netfs/internal/api"
+	"netfs/internal/transport"
+	"strconv"
+	"testing"
+	"time"
+)
+
+func TestWriteSuccess(t *testing.T) {
+	config := api.NetworkConfig{Port: 7, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	network, _ := api.NewNetwork(config)
+	local := network.LocalHost()
+
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(local)
+
+			w.Write(data)
+		})
+		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(
+				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
+			)
+
+			w.Write(data)
+		})
+		mux.HandleFunc(api.API.FileWrite, func(w http.ResponseWriter, r *http.Request) {})
+		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
+	}()
+	time.Sleep(2 * time.Second)
+
+	host, _ := network.GetHost(local.IP)
+	file, _ := host.OpenFile(network.Transport(), api.RemoteFile{Path: "./test_file.txt"})
+	err := file.Write(network.Transport(), []byte("TEST"))
+	if err != nil {
+		t.Fatal("error should be nil")
+	}
+}
+
+func TestWriteResponseError(t *testing.T) {
+	config := api.NetworkConfig{Port: 8, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	network, _ := api.NewNetwork(config)
+	local := network.LocalHost()
+
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(local)
+
+			w.Write(data)
+		})
+		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(
+				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
+			)
+
+			w.Write(data)
+		})
+		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
+	}()
+	time.Sleep(2 * time.Second)
+
+	host, _ := network.GetHost(local.IP)
+	file, _ := host.OpenFile(network.Transport(), api.RemoteFile{Path: "./test_file.txt"})
+	err := file.Write(network.Transport(), []byte("TEST"))
+	if err == nil {
+		t.Fatal("error should be not nil")
+	}
+}
+
+func TestCreateSuccess(t *testing.T) {
+	config := api.NetworkConfig{Port: 9, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	network, _ := api.NewNetwork(config)
+	local := network.LocalHost()
+
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(local)
+
+			w.Write(data)
+		})
+		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(
+				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
+			)
+
+			w.Write(data)
+		})
+		mux.HandleFunc(api.API.FileCreate, func(w http.ResponseWriter, r *http.Request) {})
+		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
+	}()
+	time.Sleep(2 * time.Second)
+
+	host, _ := network.GetHost(local.IP)
+	file, _ := host.OpenFile(network.Transport(), api.RemoteFile{Path: "./test_file.txt"})
+	err := file.Create(network.Transport())
+	if err != nil {
+		t.Fatal("error should be nil")
+	}
+}
+
+func TestCreateResponseError(t *testing.T) {
+	config := api.NetworkConfig{Port: 10, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	network, _ := api.NewNetwork(config)
+	local := network.LocalHost()
+
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(local)
+
+			w.Write(data)
+		})
+		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(
+				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
+			)
+
+			w.Write(data)
+		})
+		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
+	}()
+	time.Sleep(2 * time.Second)
+
+	host, _ := network.GetHost(local.IP)
+	file, _ := host.OpenFile(network.Transport(), api.RemoteFile{Path: "./test_file.txt"})
+	err := file.Create(network.Transport())
+	if err == nil {
+		t.Fatal("error should be not nil")
+	}
+}
+
+func TestCopyToSuccess(t *testing.T) {
+	config := api.NetworkConfig{Port: 11, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	network, _ := api.NewNetwork(config)
+	local := network.LocalHost()
+
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(local)
+
+			w.Write(data)
+		})
+		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(
+				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
+			)
+
+			w.Write(data)
+		})
+		mux.HandleFunc(api.API.FileCopyStart, func(w http.ResponseWriter, r *http.Request) {})
+		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
+	}()
+	time.Sleep(2 * time.Second)
+
+	host, _ := network.GetHost(local.IP)
+	file, _ := host.OpenFile(network.Transport(), api.RemoteFile{Path: "./test_file.txt"})
+	err := file.CopyTo(network.Transport(), api.RemoteFile{Path: "./test_file_1.txt"})
+	if err != nil {
+		t.Fatal("error should be nil")
+	}
+}
+
+func TestCopyToResponseError(t *testing.T) {
+	config := api.NetworkConfig{Port: 12, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	network, _ := api.NewNetwork(config)
+	local := network.LocalHost()
+
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(local)
+
+			w.Write(data)
+		})
+		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(
+				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
+			)
+
+			w.Write(data)
+		})
+		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
+	}()
+	time.Sleep(2 * time.Second)
+
+	host, _ := network.GetHost(local.IP)
+	file, _ := host.OpenFile(network.Transport(), api.RemoteFile{Path: "./test_file.txt"})
+	err := file.CopyTo(network.Transport(), api.RemoteFile{Path: "./test_file_1.txt"})
+	if err == nil {
+		t.Fatal("error should be not nil")
+	}
+}

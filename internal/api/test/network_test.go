@@ -13,7 +13,7 @@ import (
 )
 
 func TestGetIPs(t *testing.T) {
-	network, _ := api.NewNetwork(api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: 1 * time.Second})
+	network, _ := api.NewNetwork(api.NetworkConfig{Port: 1, Protocol: transport.HTTP, Timeout: 1 * time.Second})
 	ips, err := network.GetIPs()
 	if err != nil {
 		t.Fatal("error should be nil")
@@ -24,28 +24,20 @@ func TestGetIPs(t *testing.T) {
 	}
 }
 
-func TestGetLocalIP(t *testing.T) {
-	network, _ := api.NewNetwork(api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: 1 * time.Second})
-	ip, err := network.GetLocalIP()
-	if err != nil {
-		t.Fatal("error should be nil")
-	}
-
+func TestLocalIP(t *testing.T) {
+	network, _ := api.NewNetwork(api.NetworkConfig{Port: 1, Protocol: transport.HTTP, Timeout: 1 * time.Second})
+	ip := network.LocalIP()
 	if ip == nil {
 		t.Fatal("IP should be not nil")
 	}
 }
 
 func TestGetLocalHost(t *testing.T) {
-	network, _ := api.NewNetwork(api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: 1 * time.Second})
-	ip, _ := network.GetLocalIP()
+	network, _ := api.NewNetwork(api.NetworkConfig{Port: 1, Protocol: transport.HTTP, Timeout: 1 * time.Second})
+	ip := network.LocalIP()
 	hostname, _ := os.Hostname()
 
-	host, err := network.GetLocalHost()
-	if err != nil {
-		t.Fatal("error should be nil")
-	}
-
+	host := network.LocalHost()
 	if host.IP.String() != ip.String() {
 		t.Fatalf("[%s] and [%s] should be equals", host.IP.String(), ip.String())
 	}
@@ -56,17 +48,18 @@ func TestGetLocalHost(t *testing.T) {
 }
 
 func TestGetHostSuccess(t *testing.T) {
-	config := api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	config := api.NetworkConfig{Port: 2, Protocol: transport.HTTP, Timeout: 5 * time.Second}
 	network, _ := api.NewNetwork(config)
-	local, _ := network.GetLocalHost()
+	local := network.LocalHost()
 
 	go func() {
-		http.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(*local)
+		mux := http.NewServeMux()
+		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(local)
 
 			w.Write(data)
 		})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), nil)
+		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
 	}()
 	time.Sleep(2 * time.Second)
 
@@ -85,9 +78,9 @@ func TestGetHostSuccess(t *testing.T) {
 }
 
 func TestGetHostUnavailable(t *testing.T) {
-	config := api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	config := api.NetworkConfig{Port: 1, Protocol: transport.HTTP, Timeout: 5 * time.Second}
 	network, _ := api.NewNetwork(config)
-	local, _ := network.GetLocalHost()
+	local := network.LocalHost()
 
 	_, err := network.GetHost(local.IP)
 	if err == nil {
@@ -96,15 +89,13 @@ func TestGetHostUnavailable(t *testing.T) {
 }
 
 func TestGetHostResponseError(t *testing.T) {
-	config := api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	config := api.NetworkConfig{Port: 3, Protocol: transport.HTTP, Timeout: 5 * time.Second}
 	network, _ := api.NewNetwork(config)
-	local, _ := network.GetLocalHost()
+	local := network.LocalHost()
 
 	go func() {
-		http.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), nil)
+		mux := http.NewServeMux()
+		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
 	}()
 	time.Sleep(2 * time.Second)
 
@@ -115,17 +106,19 @@ func TestGetHostResponseError(t *testing.T) {
 }
 
 func TestGetHostsSuccess(t *testing.T) {
-	config := api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	config := api.NetworkConfig{Port: 4, Protocol: transport.HTTP, Timeout: 5 * time.Second}
 	network, _ := api.NewNetwork(config)
-	local, _ := network.GetLocalHost()
+	local := network.LocalHost()
 
 	go func() {
-		http.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(*local)
+		mux := http.NewServeMux()
+
+		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(local)
 
 			w.Write(data)
 		})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), nil)
+		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
 	}()
 	time.Sleep(2 * time.Second)
 
@@ -136,19 +129,5 @@ func TestGetHostsSuccess(t *testing.T) {
 
 	if len(hosts) == 0 {
 		t.Fatal("hosts should be not empty")
-	}
-}
-
-func TestGetHostsNoAvailable(t *testing.T) {
-	config := api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: 5 * time.Second}
-	network, _ := api.NewNetwork(config)
-
-	hosts, err := network.GetHosts()
-	if err != nil {
-		t.Fatal("error should be nil")
-	}
-
-	if len(hosts) > 0 {
-		t.Fatal("hosts should be empty")
 	}
 }

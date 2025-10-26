@@ -11,24 +11,25 @@ import (
 )
 
 func TestOpenFileSuccess(t *testing.T) {
-	config := api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	config := api.NetworkConfig{Port: 5, Protocol: transport.HTTP, Timeout: 5 * time.Second}
 	network, _ := api.NewNetwork(config)
-	local, _ := network.GetLocalHost()
+	local := network.LocalHost()
 
 	go func() {
-		http.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(*local)
+		mux := http.NewServeMux()
+		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(local)
 
 			w.Write(data)
 		})
-		http.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
-				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024},
+				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
 			)
 
 			w.Write(data)
 		})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), nil)
+		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
 	}()
 	time.Sleep(2 * time.Second)
 
@@ -52,17 +53,18 @@ func TestOpenFileSuccess(t *testing.T) {
 }
 
 func TestOpenFileResponseError(t *testing.T) {
-	config := api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	config := api.NetworkConfig{Port: 6, Protocol: transport.HTTP, Timeout: 5 * time.Second}
 	network, _ := api.NewNetwork(config)
-	local, _ := network.GetLocalHost()
+	local := network.LocalHost()
 
 	go func() {
-		http.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(*local)
+		mux := http.NewServeMux()
+		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(local)
 
 			w.Write(data)
 		})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), nil)
+		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
 	}()
 	time.Sleep(2 * time.Second)
 

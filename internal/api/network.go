@@ -23,6 +23,7 @@ type NetworkConfig struct {
 
 // Network operations.
 type Network struct {
+	host   RemoteHost
 	config NetworkConfig
 	client transport.Transport
 }
@@ -59,63 +60,59 @@ func (network *Network) GetHost(ip net.IP) (*RemoteHost, error) {
 	return nil, err
 }
 
-// Gets local IP address or error.
-func (network *Network) GetLocalIP() (net.IP, error) {
-	connection, err := net.Dial(udpProtocol, udpHost)
-	if connection != nil {
-		defer connection.Close()
-		return connection.LocalAddr().(*net.UDPAddr).IP, nil
-	}
-	return nil, err
-}
-
-// Gets information about localhost.
-func (network *Network) GetLocalHost() (*RemoteHost, error) {
-	var ip net.IP
-	var hostname string
-	var err error
-
-	if ip, err = network.GetLocalIP(); err == nil {
-		if hostname, err = os.Hostname(); err == nil {
-			return &RemoteHost{Name: hostname, IP: ip}, nil
-		}
-	}
-	return nil, err
-}
-
 // Gets all IPs of local network or error.
 func (network *Network) GetIPs() ([]net.IP, error) {
 	ips := []net.IP{}
 
-	local, err := network.GetLocalIP()
-	if err == nil {
-		localString := local.String()
-		parts := strings.Split(localString, ipSeparator)
-		cidr := strings.Join([]string{parts[0], parts[1], cidrEnd}, ipSeparator)
+	local := network.LocalIP()
+	localString := local.String()
+	parts := strings.Split(localString, ipSeparator)
+	cidr := strings.Join([]string{parts[0], parts[1], cidrEnd}, ipSeparator)
 
-		var prefix netip.Prefix
-		if prefix, err = netip.ParsePrefix(cidr); err == nil {
-			prefix = prefix.Masked()
-			addr := prefix.Addr()
-			for prefix.Contains(addr) {
-				ip := addr.String()
-				if localString != "" {
-					ips = append(ips, net.ParseIP(ip))
-				}
-				addr = addr.Next()
+	prefix, err := netip.ParsePrefix(cidr)
+	if err == nil {
+		prefix = prefix.Masked()
+		addr := prefix.Addr()
+		for prefix.Contains(addr) {
+			ip := addr.String()
+			if localString != "" {
+				ips = append(ips, net.ParseIP(ip))
 			}
+			addr = addr.Next()
 		}
 	}
 	return ips, err
 }
 
-// eturns the associated transport.
+// Returns local IP.
+func (network *Network) LocalIP() net.IP {
+	return network.host.IP
+}
+
+// Returns local host.
+func (network *Network) LocalHost() RemoteHost {
+	return network.host
+}
+
+// Returns the associated transport.
 func (network *Network) Transport() transport.Transport {
 	return network.client
 }
 
 // Creates a new instance of Network, returns an error if creation failed.
-func NewNetwork(config NetworkConfig) (Network, error) {
-	client, err := transport.NewTransport(config.Protocol, config.Port, config.Timeout)
-	return Network{config: config, client: client}, err
+func NewNetwork(config NetworkConfig) (*Network, error) {
+	connection, err := net.Dial(udpProtocol, udpHost)
+	if connection != nil {
+		defer connection.Close()
+		ip := connection.LocalAddr().(*net.UDPAddr).IP
+
+		var hostname string
+		if hostname, err = os.Hostname(); err == nil {
+			var client transport.Transport
+			if client, err = transport.NewTransport(config.Protocol, config.Port, config.Timeout); err == nil {
+				return &Network{config: config, client: client, host: RemoteHost{Name: hostname, IP: ip}}, nil
+			}
+		}
+	}
+	return nil, err
 }

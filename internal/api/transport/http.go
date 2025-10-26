@@ -76,7 +76,7 @@ func (tr *HttpTransport) SendRawBodyAndReceive(ip net.IP, path string, body []by
 					}
 				}
 			} else {
-				err = errors.Join(UnexpectedAnswer, fmt.Errorf("status code is [%d]", res.StatusCode))
+				err = errors.Join(ErrUnexpectedAnswer, fmt.Errorf("status code is [%d]", res.StatusCode))
 			}
 		}
 	}

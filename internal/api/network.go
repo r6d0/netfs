@@ -109,6 +109,11 @@ func (network *Network) GetIPs() ([]net.IP, error) {
 	return ips, err
 }
 
+// eturns the associated transport.
+func (network *Network) Transport() transport.Transport {
+	return network.client
+}
+
 // Creates a new instance of Network, returns an error if creation failed.
 func NewNetwork(config NetworkConfig) (Network, error) {
 	client, err := transport.NewTransport(config.Protocol, config.Port, config.Timeout)

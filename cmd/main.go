@@ -1,9 +1,5 @@
 package main
 
-import (
-	_ "net/http/pprof"
-)
-
 const NAME_INDEX = 1
 
 func main() {

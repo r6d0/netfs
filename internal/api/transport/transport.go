@@ -13,27 +13,30 @@ var ErrUnsupportedProtocol = errors.New("unsupported protocol")
 // eturns if the response was unexpected.
 var ErrUnexpectedAnswer = errors.New("unexpected answer")
 
+type TransportPoint []string
+
 // Available protocols.
 type TransportProtocol uint16
 
 const (
 	HTTP TransportProtocol = iota
+	CALL
 )
 
 // Abstraction of the transport layer.
 type Transport interface {
 	// Sends request.
-	Send(net.IP, string) error
+	Send(net.IP, TransportPoint) error
 	// Sends request with body.
-	SendBody(net.IP, string, any) error
+	SendBody(net.IP, TransportPoint, any) error
 	// Sends request with raw body.
-	SendRawBody(net.IP, string, []byte) error
+	SendRawBody(net.IP, TransportPoint, []byte) error
 	// Sends request and receives response.
-	SendAndReceive(net.IP, string, any) (any, error)
+	SendAndReceive(net.IP, TransportPoint, any) (any, error)
 	// Sends request with body and receives response.
-	SendBodyAndReceive(net.IP, string, any, any) (any, error)
+	SendBodyAndReceive(net.IP, TransportPoint, any, any) (any, error)
 	// Sends request with raw body and receives response.
-	SendRawBodyAndReceive(net.IP, string, []byte, any) (any, error)
+	SendRawBodyAndReceive(net.IP, TransportPoint, []byte, any) (any, error)
 	// Returns protocol.
 	Protocol() TransportProtocol
 	// Returns port.

@@ -1,3 +1,3 @@
 module netfs
 
-go 1.21.2
+go 1.24.9

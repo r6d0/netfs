@@ -17,12 +17,12 @@ func TestOpenFileSuccess(t *testing.T) {
 
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.ServerHost()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(local)
 
 			w.Write(data)
 		})
-		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
 				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
 			)
@@ -59,7 +59,7 @@ func TestOpenFileResponseError(t *testing.T) {
 
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.ServerHost()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(local)
 
 			w.Write(data)

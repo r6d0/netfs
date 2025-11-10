@@ -17,19 +17,19 @@ func TestWriteSuccess(t *testing.T) {
 
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.ServerHost()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(local)
 
 			w.Write(data)
 		})
-		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
 				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
 			)
 
 			w.Write(data)
 		})
-		mux.HandleFunc(api.API.FileWrite, func(w http.ResponseWriter, r *http.Request) {})
+		mux.HandleFunc(api.API.FileWrite("")[0], func(w http.ResponseWriter, r *http.Request) {})
 		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
 	}()
 	time.Sleep(2 * time.Second)
@@ -49,12 +49,12 @@ func TestWriteResponseError(t *testing.T) {
 
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.ServerHost()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(local)
 
 			w.Write(data)
 		})
-		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
 				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
 			)
@@ -80,19 +80,19 @@ func TestCreateSuccess(t *testing.T) {
 
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.ServerHost()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(local)
 
 			w.Write(data)
 		})
-		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
 				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
 			)
 
 			w.Write(data)
 		})
-		mux.HandleFunc(api.API.FileCreate, func(w http.ResponseWriter, r *http.Request) {})
+		mux.HandleFunc(api.API.FileCreate()[0], func(w http.ResponseWriter, r *http.Request) {})
 		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
 	}()
 	time.Sleep(2 * time.Second)
@@ -112,12 +112,12 @@ func TestCreateResponseError(t *testing.T) {
 
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.ServerHost()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(local)
 
 			w.Write(data)
 		})
-		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
 				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
 			)
@@ -143,19 +143,19 @@ func TestCopyToSuccess(t *testing.T) {
 
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.ServerHost()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(local)
 
 			w.Write(data)
 		})
-		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
 				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
 			)
 
 			w.Write(data)
 		})
-		mux.HandleFunc(api.API.FileCopyStart, func(w http.ResponseWriter, r *http.Request) {})
+		mux.HandleFunc(api.API.FileCopyStart()[0], func(w http.ResponseWriter, r *http.Request) {})
 		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
 	}()
 	time.Sleep(2 * time.Second)
@@ -175,12 +175,12 @@ func TestCopyToResponseError(t *testing.T) {
 
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc(api.API.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.ServerHost()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(local)
 
 			w.Write(data)
 		})
-		mux.HandleFunc(api.API.FileInfo, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
 				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
 			)

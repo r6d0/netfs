@@ -95,10 +95,17 @@ type taskExecutor struct {
 func (exec *taskExecutor) Submit(task Task) error {
 	log := exec.log
 	err := task.Init(TaskExecuteContext{Config: exec.config, Transport: exec.transport})
+	if err == nil {
+		var record database.Record
+		if record, err = TaskToRecord(task); err == nil {
+			err = exec.db.Set(record)
+		}
+	}
+
 	if err != nil {
 		log.Error("task: [%s] is failed: [%s]", task, err.Error())
 	} else {
-		log.Info("task: [%s] is waiting", task)
+		log.Info("task: [%v] is waiting", task)
 	}
 	return err
 }
@@ -113,6 +120,7 @@ func (exec *taskExecutor) Start() error {
 		available := maxAvailableTasks
 		complete := make(chan Task)
 		ctx := TaskExecuteContext{Config: exec.config, Transport: exec.transport}
+		condition := database.Equals(uint16(Status), []byte{byte(Waiting)})
 
 		cancelled := false
 		for {
@@ -135,7 +143,7 @@ func (exec *taskExecutor) Start() error {
 				available++
 			default:
 				if !cancelled && available > 0 {
-					records, err := exec.db.Get(database.Equals(0, []byte{}), database.Limit(available))
+					records, err := exec.db.Get(condition, database.Limit(available))
 					if err == nil {
 						exec.log.Info("tasks: [%d] are found", len(records))
 

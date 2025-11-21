@@ -12,6 +12,8 @@ type DatabaseConfig struct {
 }
 
 type Record interface {
+	SetRecordId(uint64)
+	GetRecordId() uint64
 	SetUint64(uint8, uint64)
 	GetUint64(uint8) uint64
 	SetUint8(uint8, uint8)
@@ -22,7 +24,16 @@ type Record interface {
 
 // Database record.
 type inMemoryRecord struct {
-	Fields [][]byte
+	RecordId uint64
+	Fields   [][]byte
+}
+
+func (record *inMemoryRecord) SetRecordId(recordId uint64) {
+	record.RecordId = recordId
+}
+
+func (record *inMemoryRecord) GetRecordId() uint64 {
+	return record.RecordId
 }
 
 func (record *inMemoryRecord) SetUint64(index uint8, value uint64) {
@@ -113,7 +124,7 @@ type Database interface {
 
 // Create new instance of database.
 func NewDatabase(config DatabaseConfig) Database {
-	return &inMemoryDatabase{}
+	return &inMemoryDatabase{Lock: &sync.RWMutex{}, Records: []Record{}}
 }
 
 // Simple in memory database.
@@ -157,6 +168,13 @@ func (db *inMemoryDatabase) Get(options ...Option) ([]Record, error) {
 func (db *inMemoryDatabase) Set(record Record) error {
 	db.Lock.Lock()
 	defer db.Lock.Unlock()
+
+	for idx := range db.Records {
+		if db.Records[idx].GetRecordId() == record.GetRecordId() {
+			db.Records[idx] = record
+			return nil
+		}
+	}
 
 	db.Records = append(db.Records, record)
 	return nil

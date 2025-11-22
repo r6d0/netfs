@@ -27,7 +27,7 @@ type NetworkConfig struct {
 type Network struct {
 	host   RemoteHost
 	config NetworkConfig
-	client transport.Transport
+	client transport.TransportSender
 }
 
 // Get information about available hosts.
@@ -97,7 +97,7 @@ func (network *Network) LocalHost() RemoteHost {
 }
 
 // Returns the associated transport.
-func (network *Network) Transport() transport.Transport {
+func (network *Network) Transport() transport.TransportSender {
 	return network.client
 }
 
@@ -128,8 +128,8 @@ func NewNetwork(config NetworkConfig) (*Network, error) {
 		if localIP != nil {
 			var hostname string
 			if hostname, err = os.Hostname(); err == nil {
-				var client transport.Transport
-				if client, err = transport.NewTransport(config.Protocol, config.Port, config.Timeout); err == nil {
+				var client transport.TransportSender
+				if client, err = transport.NewSender(config.Protocol, config.Port, config.Timeout); err == nil {
 					return &Network{config: config, client: client, host: RemoteHost{Name: hostname, IP: localIP}}, nil
 				}
 			}

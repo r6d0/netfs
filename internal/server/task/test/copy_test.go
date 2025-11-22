@@ -12,6 +12,10 @@ import (
 	"testing"
 )
 
+func TestC(t *testing.T) {
+
+}
+
 func TestCopyTaskToRecord(t *testing.T) {
 	copyTask := &task.CopyTask{Id: 1, Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{}, Target: api.RemoteFile{}}
 	record, err := task.CopyTaskToRecord(copyTask)

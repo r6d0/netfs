@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -23,8 +24,8 @@ const (
 	CALL
 )
 
-// Abstraction of the transport layer.
-type Transport interface {
+// Abstraction of the data sender.
+type TransportSender interface {
 	// Sends request.
 	Send(net.IP, TransportPoint) error
 	// Sends request with body.
@@ -43,10 +44,43 @@ type Transport interface {
 	Port() uint16
 }
 
-// Creates new instance of Transport.
-func NewTransport(protocol TransportProtocol, port uint16, timeout time.Duration) (Transport, error) {
+// Creates new instance of TransportSender.
+func NewSender(protocol TransportProtocol, port uint16, timeout time.Duration) (TransportSender, error) {
 	if protocol == HTTP {
-		return &HttpTransport{client: &http.Client{Timeout: timeout}, port: port}, nil
+		return &HttpTransportSender{client: &http.Client{Timeout: timeout}, port: port}, nil
+	}
+	return nil, ErrUnsupportedProtocol
+}
+
+// Abstraction of the data receiver.
+type TransportReceiver interface {
+	// Starts receiver.
+	Start() error
+	// Stops receiver.
+	Stop() error
+	// Receives request.
+	Receive(TransportPoint, func() error)
+	// Receives request with body.
+	ReceiveBody(TransportPoint, func() any, func(any) error)
+	// Receives request with raw body.
+	ReceiveRawBody(TransportPoint, func([]byte) error)
+	// Receives request with body and sends response.
+	ReceiveBodyAndSend(TransportPoint, func() any, func(any) (any, error))
+	// Receives request with raw body and sends response.
+	ReceiveRawBodyAndSend(TransportPoint, func([]byte) (any, error))
+	// Returns protocol.
+	Protocol() TransportProtocol
+	// Returns port.
+	Port() uint16
+}
+
+// Creates new instance of TransportReceiver.
+func NewReceiver(protocol TransportProtocol, port uint16) (TransportReceiver, error) {
+	if protocol == HTTP {
+		mux := http.NewServeMux()
+		server := &http.Server{Addr: portSeparator + strconv.Itoa(int(port)), Handler: mux}
+
+		return &HttpTransportReceiver{server: server, mux: mux, port: port}, nil
 	}
 	return nil, ErrUnsupportedProtocol
 }

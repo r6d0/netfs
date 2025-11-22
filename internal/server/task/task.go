@@ -44,7 +44,7 @@ const (
 
 // The context for the task.
 type TaskExecuteContext struct {
-	Transport transport.Transport
+	Transport transport.TransportSender
 	Config    TaskExecuteConfig
 }
 
@@ -80,7 +80,7 @@ type TaskExecutor interface {
 	Stop() error
 }
 
-func NewTaskExecutor(config TaskExecuteConfig, db database.Database, transport transport.Transport, log *logger.Logger) (TaskExecutor, error) {
+func NewTaskExecutor(config TaskExecuteConfig, db database.Database, transport transport.TransportSender, log *logger.Logger) (TaskExecutor, error) {
 	return &taskExecutor{config: config, log: log, db: db, transport: transport, cancel: make(chan bool)}, nil
 }
 
@@ -88,7 +88,7 @@ type taskExecutor struct {
 	config    TaskExecuteConfig
 	log       *logger.Logger
 	db        database.Database
-	transport transport.Transport
+	transport transport.TransportSender
 	cancel    chan bool
 }
 

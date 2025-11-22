@@ -1,0 +1,216 @@
+package database
+
+import (
+	"bytes"
+	"encoding/binary"
+	"sync"
+)
+
+// Database configuration.
+type DatabaseConfig struct {
+	Path string
+}
+
+type Record interface {
+	SetRecordId(uint64)
+	GetRecordId() uint64
+	SetUint64(uint8, uint64)
+	GetUint64(uint8) uint64
+	SetUint8(uint8, uint8)
+	GetUint8(uint8) uint8
+	SetField(uint8, []byte)
+	GetField(uint8) []byte
+}
+
+// Database record.
+type inMemoryRecord struct {
+	RecordId uint64
+	Fields   [][]byte
+}
+
+func (record *inMemoryRecord) SetRecordId(recordId uint64) {
+	record.RecordId = recordId
+}
+
+func (record *inMemoryRecord) GetRecordId() uint64 {
+	return record.RecordId
+}
+
+func (record *inMemoryRecord) SetUint64(index uint8, value uint64) {
+	field := make([]byte, 8)
+	binary.BigEndian.PutUint64(field, value)
+	record.Fields[index] = field
+}
+
+func (record *inMemoryRecord) GetUint64(index uint8) uint64 {
+	return binary.BigEndian.Uint64(record.Fields[index])
+}
+
+func (record *inMemoryRecord) SetUint8(index uint8, value uint8) {
+	record.Fields[index] = []byte{value}
+}
+
+func (record *inMemoryRecord) GetUint8(index uint8) uint8 {
+	return uint8(record.Fields[index][0])
+}
+
+func (record *inMemoryRecord) SetField(index uint8, field []byte) {
+	record.Fields[index] = field
+}
+
+func (record *inMemoryRecord) GetField(index uint8) []byte {
+	return record.Fields[index]
+}
+
+func NewRecord(size uint8) Record {
+	return &inMemoryRecord{Fields: make([][]byte, size)}
+}
+
+type queryCondition interface {
+	match(Record) bool
+}
+
+type queryContext struct {
+	Conditions []queryCondition
+	Limit      uint16
+}
+
+type Option interface {
+	apply(*queryContext)
+}
+
+type equalsOption struct {
+	Field uint16
+	Value []byte
+}
+
+func (opt *equalsOption) match(record Record) bool {
+	return bytes.Equal(record.GetField(uint8(opt.Field)), opt.Value)
+}
+
+func (opt *equalsOption) apply(ctx *queryContext) {
+	ctx.Conditions = append(ctx.Conditions, opt)
+}
+
+func Equals(field uint16, value []byte) Option {
+	return &equalsOption{Field: field, Value: value}
+}
+
+type limitOption struct {
+	Limit uint16
+}
+
+func (opt *limitOption) apply(ctx *queryContext) {
+	ctx.Limit = opt.Limit
+}
+
+func Limit(limit uint16) Option {
+	return &limitOption{Limit: limit}
+}
+
+// Common database of netfs server.
+type Database interface {
+	// Returns records by options.
+	Get(...Option) ([]Record, error)
+	// Sets record to database.
+	Set(Record) error
+	// Deletes records by options.
+	Del(...Option) error
+	// Starts database.
+	Start() error
+	// Stops database.
+	Stop() error
+}
+
+// Create new instance of database.
+func NewDatabase(config DatabaseConfig) Database {
+	return &inMemoryDatabase{Lock: &sync.RWMutex{}, Records: []Record{}}
+}
+
+// Simple in memory database.
+// TODO. Replace to persistable storage.
+type inMemoryDatabase struct {
+	Lock    *sync.RWMutex
+	Records []Record
+}
+
+// Returns records by options.
+func (db *inMemoryDatabase) Get(options ...Option) ([]Record, error) {
+	db.Lock.RLock()
+	defer db.Lock.RUnlock()
+
+	ctx := &queryContext{}
+	for _, option := range options {
+		option.apply(ctx)
+	}
+
+	count := uint16(0)
+	result := []Record{}
+	for _, record := range db.Records {
+		match := true
+		for _, cond := range ctx.Conditions {
+			match = match && cond.match(record)
+		}
+
+		if match {
+			result = append(result, record)
+			count++
+		}
+
+		if count == ctx.Limit {
+			break
+		}
+	}
+	return result, nil
+}
+
+// Sets record to database.
+func (db *inMemoryDatabase) Set(record Record) error {
+	db.Lock.Lock()
+	defer db.Lock.Unlock()
+
+	for idx := range db.Records {
+		if db.Records[idx].GetRecordId() == record.GetRecordId() {
+			db.Records[idx] = record
+			return nil
+		}
+	}
+
+	db.Records = append(db.Records, record)
+	return nil
+}
+
+// Deletes records by options.
+func (db *inMemoryDatabase) Del(options ...Option) error {
+	db.Lock.Lock()
+	defer db.Lock.Unlock()
+
+	ctx := &queryContext{}
+	for _, option := range options {
+		option.apply(ctx)
+	}
+
+	result := make([]Record, len(db.Records))
+	for _, record := range db.Records {
+		match := true
+		for _, cond := range ctx.Conditions {
+			match = match && cond.match(record)
+		}
+
+		if !match {
+			result = append(result, record)
+		}
+	}
+	db.Records = result
+	return nil
+}
+
+// Starts database.
+func (*inMemoryDatabase) Start() error {
+	return nil
+}
+
+// Stops database.
+func (*inMemoryDatabase) Stop() error {
+	return nil
+}

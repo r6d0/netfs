@@ -2,35 +2,64 @@ package server
 
 import (
 	"errors"
+	"netfs/internal/api"
 	"netfs/internal/api/transport"
 	"netfs/internal/logger"
 	"netfs/internal/server/database"
-	"time"
+	"netfs/internal/server/task"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
+// The netfs server configuration.
 type ServerConfig struct {
-	Protocol transport.TransportProtocol
-	Port     uint16
-	Timeout  time.Duration
+	Network  api.NetworkConfig
 	Log      logger.LoggerConfig
 	Database database.DatabaseConfig
+	Task     task.TaskExecuteConfig
 }
 
 // The netfs server.
 type Server struct {
 	db       database.Database
-	log      logger.Logger
-	sender   transport.TransportSender
+	log      *logger.Logger
+	network  *api.Network
 	receiver transport.TransportReceiver
+	tasks    task.TaskExecutor
+	stop     chan os.Signal
 }
 
 // Starts the netfs server.
 func (srv *Server) Start() error {
-	return nil
+	srv.receiver.Receive(api.API.ServerStop(), srv.StopServerHandle)
+	srv.receiver.ReceiveRawBodyAndSend(api.API.ServerHost(), srv.ServerHostHandle)
+
+	dbErr := srv.db.Start()
+	recErr := srv.receiver.Start()
+	tskErr := srv.tasks.Start()
+
+	if dbErr == nil && recErr == nil && tskErr == nil {
+		<-srv.stop // Stop signal waiting.
+	}
+
+	if recErr == nil {
+		srv.receiver.Stop()
+	}
+
+	if tskErr == nil {
+		srv.tasks.Stop()
+	}
+
+	if dbErr == nil {
+		srv.db.Stop()
+	}
+	return errors.Join(dbErr, recErr, tskErr)
 }
 
 // Stops the netfs server.
 func (srv *Server) Stop() error {
+	srv.stop <- syscall.SIGINT
 	return nil
 }
 
@@ -39,12 +68,30 @@ func NewServer(config ServerConfig) (*Server, error) {
 	log := logger.NewLogger(config.Log)
 	db := database.NewDatabase(config.Database)
 
-	sender, senderErr := transport.NewSender(config.Protocol, config.Port, config.Timeout)
-	receiver, receiverErr := transport.NewReceiver(config.Protocol, config.Port)
-	if senderErr == nil && receiverErr == nil {
-		return &Server{db: db, log: *log, sender: sender, receiver: receiver}, nil
+	network, err := api.NewNetwork(config.Network)
+	if err == nil {
+		var receiver transport.TransportReceiver
+		if receiver, err = transport.NewReceiver(config.Network.Protocol, config.Network.Port); err == nil {
+			var tasks task.TaskExecutor
+			if tasks, err = task.NewTaskExecutor(config.Task, db, network.Transport(), log); err == nil {
+				stop := make(chan os.Signal, 1)
+				signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+
+				return &Server{db: db, log: log, network: network, receiver: receiver, tasks: tasks, stop: stop}, nil
+			}
+		}
 	}
-	return nil, errors.Join(senderErr, receiverErr)
+	return nil, err
+}
+
+// Stops the server by request from current host.
+func (srv *Server) StopServerHandle() error { // TODO. Check current host.
+	return srv.Stop()
+}
+
+// Returns information about the current host.
+func (srv *Server) ServerHostHandle([]byte) (any, error) {
+	return srv.network.LocalHost(), nil
 }
 
 // const portSeparator = ":"

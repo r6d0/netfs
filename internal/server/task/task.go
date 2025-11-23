@@ -120,7 +120,7 @@ func (exec *taskExecutor) Start() error {
 		available := maxAvailableTasks
 		complete := make(chan Task)
 		ctx := TaskExecuteContext{Config: exec.config, Transport: exec.transport}
-		condition := database.Equals(uint16(Status), []byte{byte(Waiting)})
+		condition := database.Equals(uint8(Status), []byte{byte(Waiting)})
 
 		cancelled := false
 		for {

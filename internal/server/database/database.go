@@ -80,19 +80,19 @@ type Option interface {
 }
 
 type equalsOption struct {
-	Field uint16
+	Field uint8
 	Value []byte
 }
 
 func (opt *equalsOption) match(record Record) bool {
-	return bytes.Equal(record.GetField(uint8(opt.Field)), opt.Value)
+	return bytes.Equal(record.GetField(opt.Field), opt.Value)
 }
 
 func (opt *equalsOption) apply(ctx *queryContext) {
 	ctx.Conditions = append(ctx.Conditions, opt)
 }
 
-func Equals(field uint16, value []byte) Option {
+func Equals(field uint8, value []byte) Option {
 	return &equalsOption{Field: field, Value: value}
 }
 
@@ -108,8 +108,19 @@ func Limit(limit uint16) Option {
 	return &limitOption{Limit: limit}
 }
 
+type Table interface {
+	// Returns records by options.
+	Get(...Option) ([]Record, error)
+	// Sets record to database.
+	Set(Record) error
+	// Deletes records by options.
+	Del(...Option) error
+}
+
 // Common database of netfs server.
 type Database interface {
+	// Returns database table.
+	Table(string) Table
 	// Returns records by options.
 	Get(...Option) ([]Record, error)
 	// Sets record to database.
@@ -132,6 +143,11 @@ func NewDatabase(config DatabaseConfig) Database {
 type inMemoryDatabase struct {
 	Lock    *sync.RWMutex
 	Records []Record
+}
+
+// Returns database table.
+func (db *inMemoryDatabase) Table(string) Table {
+	return nil
 }
 
 // Returns records by options.

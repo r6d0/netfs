@@ -5,33 +5,37 @@ import (
 )
 
 // Type of file.
-type RemoteFileType byte
+type FileType byte
 
 const (
-	FILE RemoteFileType = iota
+	FILE FileType = iota
 	DIRECTORY
 )
 
 // Returns a string representation of the file type.
-func (fileType RemoteFileType) String() string {
+func (fileType FileType) String() string {
 	if fileType == FILE {
 		return "f"
 	}
 	return "d"
 }
 
+type FileInfo struct {
+	FileName string
+	FilePath string
+	FileType FileType
+	FileSize int64
+}
+
 // Information about file.
 type RemoteFile struct {
-	Host     RemoteHost
-	Name     string
-	Path     string
-	FileType RemoteFileType
-	Size     uint64
+	Host RemoteHost
+	Info FileInfo
 }
 
 // Writes data to remote file.
 func (file RemoteFile) Write(client transport.TransportSender, data []byte) error {
-	return client.SendRawBody(file.Host.IP, API.FileWrite(file.Path), data)
+	return client.SendRawBody(file.Host.IP, API.FileWrite(file.Info.FilePath), data)
 }
 
 // Creates file or directory on remote host.

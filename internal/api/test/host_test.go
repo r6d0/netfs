@@ -24,7 +24,7 @@ func TestOpenFileSuccess(t *testing.T) {
 		})
 		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
-				api.RemoteFile{Name: "test_file.txt", Path: "./test_file.txt", FileType: api.FILE, Size: 1024, Host: local},
+				api.RemoteFile{Info: api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024}, Host: local},
 			)
 
 			w.Write(data)
@@ -34,20 +34,20 @@ func TestOpenFileSuccess(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	file, err := host.OpenFile(network.Transport(), api.RemoteFile{Path: "./test_file.txt"})
+	file, err := host.OpenFile(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file.txt"}})
 	if err != nil {
 		t.Fatal("error should be nil")
 	}
 
-	if file.FileType != api.FILE {
+	if file.Info.FileType != api.FILE {
 		t.Fatal("element should be a file")
 	}
 
-	if file.Name != "test_file.txt" {
+	if file.Info.FileName != "test_file.txt" {
 		t.Fatal("file name should be [test_file.txt]")
 	}
 
-	if file.Path != "./test_file.txt" {
+	if file.Info.FilePath != "./test_file.txt" {
 		t.Fatal("file path should be [./test_file.txt]")
 	}
 }
@@ -69,7 +69,7 @@ func TestOpenFileResponseError(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	_, err := host.OpenFile(network.Transport(), api.RemoteFile{Path: "./test_file.txt"})
+	_, err := host.OpenFile(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file.txt"}})
 	if err == nil {
 		t.Fatal("error should be not nil")
 	}

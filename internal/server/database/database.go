@@ -92,7 +92,7 @@ func (opt *equalsOption) apply(ctx *queryContext) {
 	ctx.Conditions = append(ctx.Conditions, opt)
 }
 
-func Equals(field uint8, value []byte) Option {
+func Eq(field uint8, value []byte) Option {
 	return &equalsOption{Field: field, Value: value}
 }
 

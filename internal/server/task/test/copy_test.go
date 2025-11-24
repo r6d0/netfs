@@ -77,7 +77,7 @@ func TestExecuteSuccess(t *testing.T) {
 	}}
 	config := task.TaskExecuteConfig{Copy: task.TaskCopyConfig{BufferSize: 1024}} // 1024 bytes
 
-	copyTask := &task.CopyTask{Id: 1, Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{Path: "./TestExecuteSuccess"}, Target: api.RemoteFile{}}
+	copyTask := &task.CopyTask{Id: 1, Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{Info: api.FileInfo{FilePath: "./TestExecuteSuccess"}}, Target: api.RemoteFile{}}
 	err := copyTask.Execute(task.TaskExecuteContext{Transport: &client, Config: config})
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
@@ -100,7 +100,7 @@ func TestExecuteChunkSuccess(t *testing.T) {
 		return nil, nil
 	}}
 
-	copyTask := &task.CopyTask{Id: 1, Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{Path: "./TestExecuteChunkSuccess"}, Target: api.RemoteFile{}}
+	copyTask := &task.CopyTask{Id: 1, Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{Info: api.FileInfo{FilePath: "./TestExecuteChunkSuccess"}}, Target: api.RemoteFile{}}
 	err := copyTask.Execute(task.TaskExecuteContext{Transport: &client, Config: config})
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)

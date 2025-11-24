@@ -46,7 +46,7 @@ func (task *CopyTask) Execute(ctx TaskExecuteContext) error {
 	err := target.Create(ctx.Transport)
 	if err == nil {
 		var file *os.File
-		if file, err = os.Open(source.Path); err == nil { // TODO. Use volume.OpenFile(source.Path) for reuse the opened file already
+		if file, err = os.Open(source.Info.FilePath); err == nil { // TODO. Use volume.OpenFile(source.Path) for reuse the opened file already
 			defer file.Close()
 
 			var info os.FileInfo

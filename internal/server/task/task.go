@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+// The name of the task table in the database.
+const TaskTable = "task"
+
 // If the type is unknown.
 var ErrUnknownTaskType = errors.New("unknown a type of the task")
 
@@ -98,7 +101,8 @@ func (exec *taskExecutor) Submit(task Task) error {
 	if err == nil {
 		var record database.Record
 		if record, err = TaskToRecord(task); err == nil {
-			err = exec.db.Set(record)
+			table := exec.db.Table(TaskTable)
+			err = table.Set(record)
 		}
 	}
 
@@ -116,6 +120,7 @@ func (exec *taskExecutor) Start() error {
 	maxAvailableTasks := exec.config.MaxAvailableTasks
 	tasksWaitingSecond := time.Duration(exec.config.TasksWaitingSecond)
 
+	table := exec.db.Table(TaskTable)
 	go func(cancel chan bool) {
 		available := maxAvailableTasks
 		complete := make(chan Task)
@@ -134,7 +139,7 @@ func (exec *taskExecutor) Start() error {
 
 				err := task.AfterExecute(ctx)
 				if record, convErr := TaskToRecord(task); convErr == nil {
-					err = errors.Join(err, exec.db.Set(record))
+					err = errors.Join(err, table.Set(record))
 				}
 
 				if err != nil {
@@ -143,7 +148,7 @@ func (exec *taskExecutor) Start() error {
 				available++
 			default:
 				if !cancelled && available > 0 {
-					records, err := exec.db.Get(condition, database.Limit(available))
+					records, err := table.Get(condition, database.Limit(available))
 					if err == nil {
 						exec.log.Info("tasks: [%d] are found", len(records))
 
@@ -164,7 +169,7 @@ func (exec *taskExecutor) Start() error {
 							}
 
 							if err == nil {
-								err = exec.db.Set(record)
+								err = table.Set(record)
 							}
 
 							if err == nil {

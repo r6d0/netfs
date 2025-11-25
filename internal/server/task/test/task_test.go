@@ -30,7 +30,8 @@ func TestSubmitSuccess(t *testing.T) {
 
 	id := make([]byte, 8)
 	binary.BigEndian.PutUint64(id, copyTask.Id)
-	records, _ := db.Get(database.Eq(uint8(task.Id), id))
+	table := db.Table(task.TaskTable)
+	records, _ := table.Get(database.Eq(uint8(task.Id), id))
 	if len(records) != 1 {
 		t.Fatal("database should contains only one record")
 	}
@@ -66,7 +67,8 @@ func TestStartSuccess(t *testing.T) {
 
 	id := make([]byte, 8)
 	binary.BigEndian.PutUint64(id, copyTask.Id)
-	records, _ := db.Get(database.Eq(uint8(task.Id), id))
+	table := db.Table(task.TaskTable)
+	records, _ := table.Get(database.Eq(uint8(task.Id), id))
 	status := records[0].GetUint8(uint8(task.Status))
 	if status != uint8(task.Completed) {
 		t.Fatalf("status should be Completed, but status is [%d]", status)

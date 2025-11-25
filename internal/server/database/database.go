@@ -109,6 +109,8 @@ func Limit(limit uint16) Option {
 }
 
 type Table interface {
+	// Returns table name.
+	Name() string
 	// Returns records by options.
 	Get(...Option) ([]Record, error)
 	// Sets record to database.
@@ -117,43 +119,20 @@ type Table interface {
 	Del(...Option) error
 }
 
-// Common database of netfs server.
-type Database interface {
-	// Returns database table.
-	Table(string) Table
-	// Returns records by options.
-	Get(...Option) ([]Record, error)
-	// Sets record to database.
-	Set(Record) error
-	// Deletes records by options.
-	Del(...Option) error
-	// Starts database.
-	Start() error
-	// Stops database.
-	Stop() error
+type inMemoryTable struct {
+	name    string
+	lock    *sync.RWMutex
+	records []Record
 }
 
-// Create new instance of database.
-func NewDatabase(config DatabaseConfig) Database {
-	return &inMemoryDatabase{Lock: &sync.RWMutex{}, Records: []Record{}}
-}
-
-// Simple in memory database.
-// TODO. Replace to persistable storage.
-type inMemoryDatabase struct {
-	Lock    *sync.RWMutex
-	Records []Record
-}
-
-// Returns database table.
-func (db *inMemoryDatabase) Table(string) Table {
-	return nil
+func (tb *inMemoryTable) Name() string {
+	return tb.name
 }
 
 // Returns records by options.
-func (db *inMemoryDatabase) Get(options ...Option) ([]Record, error) {
-	db.Lock.RLock()
-	defer db.Lock.RUnlock()
+func (tb *inMemoryTable) Get(options ...Option) ([]Record, error) {
+	tb.lock.RLock()
+	defer tb.lock.RUnlock()
 
 	ctx := &queryContext{}
 	for _, option := range options {
@@ -162,7 +141,7 @@ func (db *inMemoryDatabase) Get(options ...Option) ([]Record, error) {
 
 	count := uint16(0)
 	result := []Record{}
-	for _, record := range db.Records {
+	for _, record := range tb.records {
 		match := true
 		for _, cond := range ctx.Conditions {
 			match = match && cond.match(record)
@@ -181,33 +160,33 @@ func (db *inMemoryDatabase) Get(options ...Option) ([]Record, error) {
 }
 
 // Sets record to database.
-func (db *inMemoryDatabase) Set(record Record) error {
-	db.Lock.Lock()
-	defer db.Lock.Unlock()
+func (tb *inMemoryTable) Set(record Record) error {
+	tb.lock.Lock()
+	defer tb.lock.Unlock()
 
-	for idx := range db.Records {
-		if db.Records[idx].GetRecordId() == record.GetRecordId() {
-			db.Records[idx] = record
+	for idx := range tb.records {
+		if tb.records[idx].GetRecordId() == record.GetRecordId() {
+			tb.records[idx] = record
 			return nil
 		}
 	}
 
-	db.Records = append(db.Records, record)
+	tb.records = append(tb.records, record)
 	return nil
 }
 
 // Deletes records by options.
-func (db *inMemoryDatabase) Del(options ...Option) error {
-	db.Lock.Lock()
-	defer db.Lock.Unlock()
+func (tb *inMemoryTable) Del(options ...Option) error {
+	tb.lock.Lock()
+	defer tb.lock.Unlock()
 
 	ctx := &queryContext{}
 	for _, option := range options {
 		option.apply(ctx)
 	}
 
-	result := make([]Record, len(db.Records))
-	for _, record := range db.Records {
+	result := make([]Record, len(tb.records))
+	for _, record := range tb.records {
 		match := true
 		for _, cond := range ctx.Conditions {
 			match = match && cond.match(record)
@@ -217,8 +196,46 @@ func (db *inMemoryDatabase) Del(options ...Option) error {
 			result = append(result, record)
 		}
 	}
-	db.Records = result
+	tb.records = result
 	return nil
+}
+
+// Common database of netfs server.
+type Database interface {
+	// Returns database table.
+	Table(string) Table
+	// Starts database.
+	Start() error
+	// Stops database.
+	Stop() error
+}
+
+// Create new instance of database.
+func NewDatabase(config DatabaseConfig) Database {
+	return &inMemoryDatabase{lock: &sync.RWMutex{}, tables: []Table{}}
+}
+
+// Simple in memory database.
+// TODO. Replace to persistable storage.
+type inMemoryDatabase struct {
+	lock   *sync.RWMutex
+	tables []Table
+}
+
+// Returns database table.
+func (db *inMemoryDatabase) Table(name string) Table {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	for _, table := range db.tables {
+		if table.Name() == name {
+			return table
+		}
+	}
+
+	table := &inMemoryTable{name: name, lock: &sync.RWMutex{}, records: []Record{}}
+	db.tables = append(db.tables, table)
+	return table
 }
 
 // Starts database.

@@ -90,7 +90,7 @@ func NewCopyTask(source api.RemoteFile, target api.RemoteFile) (*CopyTask, error
 // Converts a database record to a task.
 func CopyTaskFromRecord(record database.Record) (*CopyTask, error) {
 	task := &CopyTask{}
-	data := record.GetField(uint8(Payload))
+	data := record.GetField(Payload)
 	if err := json.Unmarshal(data, task); err != nil {
 		return nil, err
 	}
@@ -98,16 +98,19 @@ func CopyTaskFromRecord(record database.Record) (*CopyTask, error) {
 }
 
 // Converts a task to a database record.
-func CopyTaskToRecord(task *CopyTask) (database.Record, error) {
+func CopyTaskToRecord(table database.Table, task *CopyTask) (database.Record, error) {
+	if task.Id == 0 {
+		task.Id = table.NextId()
+	}
+
 	var record database.Record
 	data, err := json.Marshal(task)
 	if err == nil {
-		record = database.NewRecord(uint8(Payload) + 1)
-		record.SetRecordId(task.Id) // TODO. Database must generate id itself.
-		record.SetUint64(uint8(Id), task.Id)
-		record.SetUint8(uint8(Status), uint8(task.Status))
-		record.SetUint8(uint8(Type), uint8(task.Type))
-		record.SetField(uint8(Payload), data)
+		record = database.NewRecord(3)
+		record.SetRecordId(task.Id)
+		record.SetUint8(Status, uint8(task.Status))
+		record.SetUint8(Type, uint8(task.Type))
+		record.SetField(Payload, data)
 	}
 	return record, err
 }

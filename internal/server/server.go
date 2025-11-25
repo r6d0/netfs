@@ -7,6 +7,7 @@ import (
 	"netfs/internal/logger"
 	"netfs/internal/server/database"
 	"netfs/internal/server/task"
+	"netfs/internal/server/volume"
 	"os"
 	"os/signal"
 	"syscall"
@@ -27,6 +28,7 @@ type Server struct {
 	network  *api.Network
 	receiver transport.TransportReceiver
 	tasks    task.TaskExecutor
+	volumes  volume.VolumeManager
 	stop     chan os.Signal
 }
 
@@ -34,6 +36,7 @@ type Server struct {
 func (srv *Server) Start() error {
 	srv.receiver.Receive(api.API.ServerStop(), srv.StopServerHandle)
 	srv.receiver.ReceiveRawBodyAndSend(api.API.ServerHost(), srv.ServerHostHandle)
+	srv.receiver.ReceiveRawBodyAndSend(api.API.FileInfo(), srv.FileInfoHandle)
 
 	dbErr := srv.db.Start()
 	recErr := srv.receiver.Start()
@@ -74,10 +77,13 @@ func NewServer(config ServerConfig) (*Server, error) {
 		if receiver, err = transport.NewReceiver(config.Network.Protocol, config.Network.Port); err == nil {
 			var tasks task.TaskExecutor
 			if tasks, err = task.NewTaskExecutor(config.Task, db, network.Transport(), log); err == nil {
-				stop := make(chan os.Signal, 1)
-				signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+				var volumes volume.VolumeManager
+				if volumes, err = volume.NewVolumeManager(db); err == nil {
+					stop := make(chan os.Signal, 1)
+					signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
-				return &Server{db: db, log: log, network: network, receiver: receiver, tasks: tasks, stop: stop}, nil
+					return &Server{db: db, log: log, network: network, receiver: receiver, tasks: tasks, volumes: volumes, stop: stop}, nil
+				}
 			}
 		}
 	}
@@ -94,178 +100,15 @@ func (srv *Server) ServerHostHandle([]byte) (any, error) {
 	return srv.network.LocalHost(), nil
 }
 
-// const portSeparator = ":"
-
-// // HTTP server.
-// type Server struct {
-// 	db         store.Store
-// 	httpServer *http.Server
-// 	config     *netfs.Config
-// 	tasks      *_TasksContext
-// 	host       netfs.RemoteHost
-// 	stop       chan os.Signal
-// 	executor   task.TaskExecutor
-// 	log        *logger.Logger
-// }
-
-// // Start requests listening. It's blocking current thread.
-// func (serv *Server) Start() error {
-// 	// Start database.
-// 	err := serv.db.Start()
-
-// 	if err == nil {
-// 		// Start tasks executor.
-// 		err = serv.executor.Start()
-// 		if err == nil {
-// 			// Run HTTP server.
-// 			go func() {
-// 				err = serv.httpServer.ListenAndServe()
-// 				if err != http.ErrServerClosed {
-// 					serv.stop <- syscall.SIGINT
-// 				}
-// 			}()
-
-// 			// Stop signal waiting.
-// 			<-serv.stop
-
-// 			if err == nil {
-// 				// HTTP server stopping.
-// 				err = serv.httpServer.Shutdown(context.Background())
-// 			}
-
-// 			// Tasks stopping.
-// 			serv.tasks._Shutdown()
-// 		}
-
-// 		// Stop tasks executor.
-// 		err = errors.Join(err, serv.executor.Stop())
-// 	}
-
-// 	// Stop database.
-// 	err = errors.Join(err, serv.db.Stop())
-// 	serv.log.Error("server error: [%s]", err)
-
-// 	if err == nil {
-// 		serv.log.Info("server is stopped")
-// 	}
-// 	return err
-// }
-
-// // Stop the running server.
-// func (serv *Server) Stop() {
-// 	serv.stop <- syscall.SIGINT
-// }
-
-// // New instance of the netfs server.
-// func NewServer(config *netfs.Config) (*Server, error) {
-// 	log := logger.NewLogger(logger.LoggerConfig{Level: logger.Info})
-
-// 	network, err := netfs.NewNetwork(config)
-// 	if err == nil {
-// 		store := store.NewStore(store.StoreConfig{Path: "./data"})
-
-// 		var executor task.TaskExecutor
-// 		if executor, err = task.NewTaskExecutor(task.TaskConfig{MaxAvailableTasks: 100, TasksWaitingSecond: 2}, store, log); err == nil {
-// 			// Information about server host
-// 			var host *netfs.RemoteHost
-// 			host, err = network.GetLocalHost()
-// 			if err == nil {
-// 				server := &Server{config: config, host: *host, db: store, log: log, executor: executor}
-
-// 				// Stop signal
-// 				server.stop = make(chan os.Signal, 1)
-// 				signal.Notify(server.stop, syscall.SIGINT, syscall.SIGTERM)
-
-// 				// Tasks context
-// 				ctx, cancel := context.WithCancel(context.Background())
-// 				server.tasks = &_TasksContext{_Context: ctx, _Shutdown: cancel}
-
-// 				// API Registration
-// 				mux := http.NewServeMux()
-// 				mux.HandleFunc(netfs.API.Stop, server.stopHandle)
-// 				mux.HandleFunc(netfs.API.Host, server.hostHandle)
-// 				mux.HandleFunc(netfs.API.FileInfo.URL, server.fileInfoHandle)
-// 				mux.HandleFunc(netfs.API.FileCreate.URL, server.fileCreateHandle)
-// 				mux.HandleFunc(netfs.API.FileWrite.URL, server.fileWriteHandle)
-// 				mux.HandleFunc(netfs.API.FileCopyStart.URL, server.fileCopyStartHandle)
-// 				mux.HandleFunc(netfs.API.FileCopyStatus.URL, server.fileCopyStatusHandle)
-
-// 				server.httpServer = &http.Server{Addr: portSeparator + strconv.Itoa(int(config.Server.Port)), Handler: mux}
-// 				return server, nil
-// 			}
-// 		}
-// 	}
-// 	return nil, err
-// }
-
-// // Stops the server.
-// func (serv *Server) stopHandle(writer http.ResponseWriter, request *http.Request) {
-// 	if request.Method == http.MethodGet {
-// 		// Only from current host.
-// 		if strings.Contains(request.RemoteAddr, serv.host.IP.String()) {
-// 			serv.Stop()
-// 		} else {
-// 			writer.WriteHeader(http.StatusForbidden)
-// 		}
-// 	} else {
-// 		writer.WriteHeader(http.StatusMethodNotAllowed)
-// 	}
-// }
-
-// // Returns information about the current host.
-// func (serv *Server) hostHandle(writer http.ResponseWriter, request *http.Request) {
-// 	if request.Method == http.MethodGet {
-// 		data, err := json.Marshal(serv.host)
-// 		if err == nil {
-// 			_, err = writer.Write(data)
-// 		}
-
-// 		if err != nil {
-// 			fmt.Println(err) // TODO. Log format
-
-// 			writer.Write([]byte(err.Error()))
-// 			writer.WriteHeader(http.StatusInternalServerError)
-// 		}
-// 	} else {
-// 		writer.WriteHeader(http.StatusMethodNotAllowed)
-// 	}
-// }
-
-// // Returns information about file or directory.
-// func (serv *Server) fileInfoHandle(writer http.ResponseWriter, request *http.Request) {
-// 	if request.Method == netfs.API.FileInfo.Method {
-// 		query := request.URL.Query()
-// 		if path := query.Get(netfs.API.FileInfo.Path); path != "" {
-// 			file, err := os.Open(path)
-// 			if err == nil {
-// 				defer file.Close()
-
-// 				var info os.FileInfo
-// 				if info, err = file.Stat(); err == nil {
-// 					fileType := netfs.FILE
-// 					if info.IsDir() {
-// 						fileType = netfs.DIRECTORY
-// 					}
-
-// 					var data []byte
-// 					data, err = json.Marshal(netfs.RemoteFile{Host: serv.host, Name: info.Name(), Path: path, Type: fileType, Size: uint64(info.Size())})
-// 					if err == nil {
-// 						writer.Write(data)
-// 					}
-// 				}
-// 			}
-
-// 			if err != nil {
-// 				fmt.Println(err) // TODO. Log format
-
-// 				writer.Write([]byte(err.Error()))
-// 				writer.WriteHeader(http.StatusInternalServerError)
-// 			}
-// 		}
-// 	} else {
-// 		writer.WriteHeader(http.StatusMethodNotAllowed)
-// 	}
-// }
+// Returns information about file.
+func (srv *Server) FileInfoHandle(data []byte) (any, error) {
+	path := string(data)
+	volume, err := srv.volumes.Volume(path)
+	if err == nil {
+		return volume.Info(path)
+	}
+	return nil, err
+}
 
 // // Create directory.
 // func (serv *Server) fileCreateHandle(writer http.ResponseWriter, request *http.Request) {

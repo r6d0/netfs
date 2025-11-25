@@ -11,15 +11,18 @@ type DatabaseConfig struct {
 	Path string
 }
 
+// Field of the record.
+type RecordField int8
+
 type Record interface {
 	SetRecordId(uint64)
 	GetRecordId() uint64
-	SetUint64(uint8, uint64)
-	GetUint64(uint8) uint64
-	SetUint8(uint8, uint8)
-	GetUint8(uint8) uint8
-	SetField(uint8, []byte)
-	GetField(uint8) []byte
+	SetUint64(RecordField, uint64)
+	GetUint64(RecordField) uint64
+	SetUint8(RecordField, uint8)
+	GetUint8(RecordField) uint8
+	SetField(RecordField, []byte)
+	GetField(RecordField) []byte
 }
 
 // Database record.
@@ -36,33 +39,33 @@ func (record *inMemoryRecord) GetRecordId() uint64 {
 	return record.RecordId
 }
 
-func (record *inMemoryRecord) SetUint64(index uint8, value uint64) {
+func (record *inMemoryRecord) SetUint64(index RecordField, value uint64) {
 	field := make([]byte, 8)
 	binary.BigEndian.PutUint64(field, value)
 	record.Fields[index] = field
 }
 
-func (record *inMemoryRecord) GetUint64(index uint8) uint64 {
+func (record *inMemoryRecord) GetUint64(index RecordField) uint64 {
 	return binary.BigEndian.Uint64(record.Fields[index])
 }
 
-func (record *inMemoryRecord) SetUint8(index uint8, value uint8) {
+func (record *inMemoryRecord) SetUint8(index RecordField, value uint8) {
 	record.Fields[index] = []byte{value}
 }
 
-func (record *inMemoryRecord) GetUint8(index uint8) uint8 {
+func (record *inMemoryRecord) GetUint8(index RecordField) uint8 {
 	return uint8(record.Fields[index][0])
 }
 
-func (record *inMemoryRecord) SetField(index uint8, field []byte) {
+func (record *inMemoryRecord) SetField(index RecordField, field []byte) {
 	record.Fields[index] = field
 }
 
-func (record *inMemoryRecord) GetField(index uint8) []byte {
+func (record *inMemoryRecord) GetField(index RecordField) []byte {
 	return record.Fields[index]
 }
 
-func NewRecord(size uint8) Record {
+func NewRecord(size int8) Record {
 	return &inMemoryRecord{Fields: make([][]byte, size)}
 }
 
@@ -79,21 +82,37 @@ type Option interface {
 	apply(*queryContext)
 }
 
-type equalsOption struct {
-	Field uint8
-	Value []byte
+type idOption struct {
+	Value uint64
 }
 
-func (opt *equalsOption) match(record Record) bool {
-	return bytes.Equal(record.GetField(opt.Field), opt.Value)
+func (opt *idOption) match(record Record) bool {
+	return record.GetRecordId() == opt.Value
 }
 
-func (opt *equalsOption) apply(ctx *queryContext) {
+func (opt *idOption) apply(ctx *queryContext) {
 	ctx.Conditions = append(ctx.Conditions, opt)
 }
 
-func Eq(field uint8, value []byte) Option {
-	return &equalsOption{Field: field, Value: value}
+func Id(value uint64) Option {
+	return &idOption{Value: value}
+}
+
+type eqOption struct {
+	Field RecordField
+	Value []byte
+}
+
+func (opt *eqOption) match(record Record) bool {
+	return bytes.Equal(record.GetField(opt.Field), opt.Value)
+}
+
+func (opt *eqOption) apply(ctx *queryContext) {
+	ctx.Conditions = append(ctx.Conditions, opt)
+}
+
+func Eq(field RecordField, value []byte) Option {
+	return &eqOption{Field: field, Value: value}
 }
 
 type limitOption struct {
@@ -111,6 +130,8 @@ func Limit(limit uint16) Option {
 type Table interface {
 	// Returns table name.
 	Name() string
+	// Returns next internal identifier.
+	NextId() uint64
 	// Returns records by options.
 	Get(...Option) ([]Record, error)
 	// Sets record to database.
@@ -120,13 +141,23 @@ type Table interface {
 }
 
 type inMemoryTable struct {
-	name    string
-	lock    *sync.RWMutex
-	records []Record
+	name         string
+	lastRecordId uint64
+	lock         *sync.RWMutex
+	records      []Record
 }
 
 func (tb *inMemoryTable) Name() string {
 	return tb.name
+}
+
+// Returns next internal identifier.
+func (tb *inMemoryTable) NextId() uint64 {
+	tb.lock.Lock()
+	defer tb.lock.Unlock()
+
+	tb.lastRecordId++
+	return tb.lastRecordId
 }
 
 // Returns records by options.

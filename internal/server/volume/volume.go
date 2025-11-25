@@ -4,13 +4,31 @@ import (
 	"errors"
 	"netfs/internal/api"
 	"netfs/internal/server/database"
+	"strings"
 )
+
+const volumeSeparator = ":"
 
 // The name of the volume table in the database.
 const VolumeTable = "volume"
 
+// Fields of the 'volume' table.
+const (
+	VolumeName database.RecordField = iota
+	VolumePath
+	VolumePerm
+)
+
 // The name of the files table in the database.
 const VolumeFileTable = "volume_file"
+
+// Fields of the 'volume_file' table.
+const (
+	FileName database.RecordField = iota
+	FilePath
+	FileSize
+	FileType
+)
 
 // If the file is not found.
 var ErrFileNotFound = errors.New("file is not found")
@@ -24,27 +42,11 @@ var ErrReadIsNotPermitted = errors.New("read operation is not permitted")
 // If write operation is not permitted.
 var ErrWriteIsNotPermitted = errors.New("write operation is not permitted")
 
-// Fields of the volume_file table.
-type VolumeFileRecordField uint8
-
-// Fields of the volume table.
-type VolumeRecordField uint8
-
 // Volume permitions.
 type VolumePermition uint8
 
 const (
-	VolumeName VolumeRecordField = iota
-	VolumePath
-	VolumePerm
-
-	FileName VolumeFileRecordField = iota
-	FilePath
-	FileSize
-	FileType
-	FileParent
-
-	Read VolumePermition = iota
+	Read VolumePermition = 1 << iota
 	Write
 )
 
@@ -59,6 +61,7 @@ type Volume interface {
 }
 
 type volume struct {
+	id   uint64
 	name string
 	path string
 	perm VolumePermition
@@ -80,7 +83,7 @@ func (vl *volume) Perm() VolumePermition {
 func (vl *volume) Info(path string) (*api.FileInfo, error) {
 	if vl.perm&Read != 0 {
 		table := vl.db.Table(VolumeFileTable)
-		records, err := table.Get(database.Eq(uint8(FilePath), []byte(path)))
+		records, err := table.Get(database.Eq(FilePath, []byte(path)))
 		if err == nil {
 			if len(records) == 1 {
 				return fileInfoFromRecord(records[0])
@@ -113,13 +116,29 @@ type VolumeManager interface {
 
 // Returns a new instance of the volume manager.
 func NewVolumeManager(db database.Database) (VolumeManager, error) {
-	table := db.Table(VolumeTable)
-	records, err := table.Get()
+	// TODO. For testing only
+	vlTable := db.Table(VolumeTable)
+	vlRecord := database.NewRecord(3)
+	vlRecord.SetRecordId(vlTable.NextId())
+	vlRecord.SetField(VolumeName, []byte("root"))
+	vlRecord.SetField(VolumePath, []byte("./"))
+	vlRecord.SetUint8(VolumePerm, uint8(Read|Write))
+	vlTable.Set(vlRecord)
+
+	flTable := db.Table(VolumeFileTable)
+	flRecord := database.NewRecord(5)
+	flRecord.SetField(FileName, []byte("myfile.txt"))
+	flRecord.SetField(FilePath, []byte("root:/myfile.txt"))
+	flRecord.SetUint64(FileSize, 100)
+	flRecord.SetUint8(FileType, uint8(api.FILE))
+	flTable.Set(flRecord)
+
+	records, err := vlTable.Get()
 	if err == nil {
 		volumes := make([]Volume, len(records))
 		for idx := range records {
 			var volume Volume
-			if volume, err = volumeFromRecord(records[idx]); err == nil {
+			if volume, err = volumeFromRecord(db, records[idx]); err == nil {
 				volumes[idx] = volume
 			} else {
 				break
@@ -138,7 +157,12 @@ type volumeManager struct {
 	volumes []Volume
 }
 
-func (mng *volumeManager) Volume(name string) (Volume, error) {
+func (mng *volumeManager) Volume(path string) (Volume, error) {
+	name := path
+	if strings.Contains(path, volumeSeparator) {
+		name = strings.Split(path, volumeSeparator)[0]
+	}
+
 	for _, volume := range mng.volumes {
 		if volume.Name() == name {
 			return volume, nil
@@ -147,19 +171,21 @@ func (mng *volumeManager) Volume(name string) (Volume, error) {
 	return nil, ErrVolumeNotFound
 }
 
-func volumeFromRecord(record database.Record) (Volume, error) {
+func volumeFromRecord(db database.Database, record database.Record) (Volume, error) {
 	return &volume{
-		name: string(record.GetField(uint8(VolumeName))),
-		path: string(record.GetField(uint8(VolumePath))),
-		perm: VolumePermition(record.GetUint8(uint8(VolumePerm))),
+		id:   record.GetRecordId(),
+		name: string(record.GetField(VolumeName)),
+		path: string(record.GetField(VolumePath)),
+		perm: VolumePermition(record.GetUint8(VolumePerm)),
+		db:   db,
 	}, nil
 }
 
 func fileInfoFromRecord(record database.Record) (*api.FileInfo, error) {
 	return &api.FileInfo{
-		FileName: string(record.GetField(uint8(FileName))),
-		FilePath: string(record.GetField(uint8(FilePath))),
-		FileType: api.FileType(record.GetUint8(uint8(FileType))),
-		FileSize: int64(record.GetUint64(uint8(FileSize))),
+		FileName: string(record.GetField(FileName)),
+		FilePath: string(record.GetField(FilePath)),
+		FileType: api.FileType(record.GetUint8(FileType)),
+		FileSize: int64(record.GetUint64(FileSize)),
 	}, nil
 }

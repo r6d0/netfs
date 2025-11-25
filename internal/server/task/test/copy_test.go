@@ -7,35 +7,30 @@ import (
 	"net"
 	"netfs/internal/api"
 	"netfs/internal/api/transport"
+	"netfs/internal/server/database"
 	"netfs/internal/server/task"
 	"os"
 	"testing"
 )
 
-func TestC(t *testing.T) {
-
-}
-
 func TestCopyTaskToRecord(t *testing.T) {
-	copyTask := &task.CopyTask{Id: 1, Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{}, Target: api.RemoteFile{}}
-	record, err := task.CopyTaskToRecord(copyTask)
+	db := database.NewDatabase(database.DatabaseConfig{})
+	table := db.Table("task")
+	copyTask := &task.CopyTask{Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{}, Target: api.RemoteFile{}}
+	record, err := task.CopyTaskToRecord(table, copyTask)
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	if record.GetUint64(uint8(task.Id)) != copyTask.Id {
-		t.Fatalf("id should be [%d], but id is [%d]", record.GetUint64(uint8(task.Id)), copyTask.Id)
+	if record.GetUint8(task.Status) != uint8(copyTask.Status) {
+		t.Fatalf("status should be [%d], but status is [%d]", record.GetUint8(task.Status), copyTask.Status)
 	}
 
-	if record.GetUint8(uint8(task.Status)) != uint8(copyTask.Status) {
-		t.Fatalf("status should be [%d], but status is [%d]", record.GetUint8(uint8(task.Status)), copyTask.Status)
+	if record.GetUint8(task.Type) != uint8(copyTask.Type) {
+		t.Fatalf("type should be [%d], but type is [%d]", record.GetUint8(task.Type), copyTask.Type)
 	}
 
-	if record.GetUint8(uint8(task.Type)) != uint8(copyTask.Type) {
-		t.Fatalf("type should be [%d], but type is [%d]", record.GetUint8(uint8(task.Type)), copyTask.Type)
-	}
-
-	payload := record.GetField(uint8(task.Payload))
+	payload := record.GetField(task.Payload)
 	data, _ := json.Marshal(copyTask)
 	if !bytes.Equal(data, payload) {
 		t.Fatalf("payload should be [%s], but payload is [%s]", string(data), string(payload))
@@ -43,15 +38,13 @@ func TestCopyTaskToRecord(t *testing.T) {
 }
 
 func TestCopyTaskFromRecord(t *testing.T) {
-	orig := &task.CopyTask{Id: 1, Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{}, Target: api.RemoteFile{}}
-	record, _ := task.CopyTaskToRecord(orig)
+	db := database.NewDatabase(database.DatabaseConfig{})
+	table := db.Table("task")
+	orig := &task.CopyTask{Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{}, Target: api.RemoteFile{}}
+	record, _ := task.CopyTaskToRecord(table, orig)
 	copyTask, err := task.CopyTaskFromRecord(record)
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
-	}
-
-	if orig.Id != copyTask.Id {
-		t.Fatalf("id should be [%d], but id is [%d]", orig.Id, copyTask.Id)
 	}
 
 	if orig.Status != copyTask.Status {
@@ -77,7 +70,7 @@ func TestExecuteSuccess(t *testing.T) {
 	}}
 	config := task.TaskExecuteConfig{Copy: task.TaskCopyConfig{BufferSize: 1024}} // 1024 bytes
 
-	copyTask := &task.CopyTask{Id: 1, Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{Info: api.FileInfo{FilePath: "./TestExecuteSuccess"}}, Target: api.RemoteFile{}}
+	copyTask := &task.CopyTask{Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{Info: api.FileInfo{FilePath: "./TestExecuteSuccess"}}, Target: api.RemoteFile{}}
 	err := copyTask.Execute(task.TaskExecuteContext{Transport: &client, Config: config})
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
@@ -100,7 +93,7 @@ func TestExecuteChunkSuccess(t *testing.T) {
 		return nil, nil
 	}}
 
-	copyTask := &task.CopyTask{Id: 1, Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{Info: api.FileInfo{FilePath: "./TestExecuteChunkSuccess"}}, Target: api.RemoteFile{}}
+	copyTask := &task.CopyTask{Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{Info: api.FileInfo{FilePath: "./TestExecuteChunkSuccess"}}, Target: api.RemoteFile{}}
 	err := copyTask.Execute(task.TaskExecuteContext{Transport: &client, Config: config})
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
@@ -118,7 +111,7 @@ func TestExecuteFailure(t *testing.T) {
 		return nil, nil
 	}}
 
-	copyTask := &task.CopyTask{Id: 1, Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{}, Target: api.RemoteFile{}}
+	copyTask := &task.CopyTask{Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{}, Target: api.RemoteFile{}}
 	err := copyTask.Execute(task.TaskExecuteContext{Transport: &client, Config: config})
 	if err == nil {
 		t.Fatalf("error should be not nil")

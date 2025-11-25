@@ -79,3 +79,30 @@ func TestStopServerHandleSuccess(t *testing.T) {
 	}
 	srv.Stop()
 }
+
+func TestFileInfoHandleSuccess(t *testing.T) {
+	config := server.ServerConfig{
+		Network:  api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: time.Second * 5},
+		Log:      logger.LoggerConfig{Level: logger.Info},
+		Database: database.DatabaseConfig{Path: "./"},
+		Task:     task.TaskExecuteConfig{MaxAvailableTasks: 100, Copy: task.TaskCopyConfig{BufferSize: 1024}, TasksWaitingSecond: 100},
+	}
+
+	srv, err := server.NewServer(config)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	go func() {
+		srv.Start()
+	}()
+	time.Sleep(2 * time.Second)
+
+	network, _ := api.NewNetwork(config.Network)
+	info, err := network.Transport().SendRawBodyAndReceive(network.LocalIP(), api.API.FileInfo(), []byte("root:/myfile.txt"), &api.FileInfo{})
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+	fmt.Println(info)
+	srv.Stop()
+}

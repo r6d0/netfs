@@ -11,6 +11,12 @@ import (
 // The name of the task table in the database.
 const TaskTable = "task"
 
+const (
+	Status database.RecordField = iota
+	Type
+	Payload
+)
+
 // If the type is unknown.
 var ErrUnknownTaskType = errors.New("unknown a type of the task")
 
@@ -31,11 +37,6 @@ type TaskStatus uint8
 type TaskType uint8
 
 const (
-	Id TaskRecordField = iota
-	Status
-	Type
-	Payload
-
 	Waiting TaskStatus = iota
 	Stopped
 	Failed
@@ -62,23 +63,23 @@ type Task interface {
 
 // Converts a database record to a task.
 func TaskFromRecord(record database.Record) (Task, error) {
-	if TaskType(record.GetUint8(uint8(Type))) == Copy {
+	if TaskType(record.GetUint8(Type)) == Copy {
 		return CopyTaskFromRecord(record)
 	}
 	return nil, ErrUnknownTaskType
 }
 
 // Converts a task to a database record.
-func TaskToRecord(task Task) (database.Record, error) {
+func TaskToRecord(table database.Table, task Task) (database.Record, error) {
 	if task.TaskType() == Copy {
-		return CopyTaskToRecord(task.(*CopyTask))
+		return CopyTaskToRecord(table, task.(*CopyTask))
 	}
 	return nil, ErrUnknownTaskType
 }
 
 // The tasks executor.
 type TaskExecutor interface {
-	Submit(Task) error
+	Submit(Task) (uint64, error)
 	Start() error
 	Stop() error
 }
@@ -95,13 +96,15 @@ type taskExecutor struct {
 	cancel    chan bool
 }
 
-func (exec *taskExecutor) Submit(task Task) error {
+func (exec *taskExecutor) Submit(task Task) (uint64, error) {
+	var taskId uint64
+	var record database.Record
+
 	log := exec.log
 	err := task.Init(TaskExecuteContext{Config: exec.config, Transport: exec.transport})
 	if err == nil {
-		var record database.Record
-		if record, err = TaskToRecord(task); err == nil {
-			table := exec.db.Table(TaskTable)
+		table := exec.db.Table(TaskTable)
+		if record, err = TaskToRecord(table, task); err == nil {
 			err = table.Set(record)
 		}
 	}
@@ -109,9 +112,10 @@ func (exec *taskExecutor) Submit(task Task) error {
 	if err != nil {
 		log.Error("task: [%s] is failed: [%s]", task, err.Error())
 	} else {
+		taskId = record.GetRecordId()
 		log.Info("task: [%v] is waiting", task)
 	}
-	return err
+	return taskId, err
 }
 
 func (exec *taskExecutor) Start() error {
@@ -125,7 +129,7 @@ func (exec *taskExecutor) Start() error {
 		available := maxAvailableTasks
 		complete := make(chan Task)
 		ctx := TaskExecuteContext{Config: exec.config, Transport: exec.transport}
-		condition := database.Eq(uint8(Status), []byte{byte(Waiting)})
+		condition := database.Eq(Status, []byte{byte(Waiting)})
 
 		cancelled := false
 		for {
@@ -138,7 +142,7 @@ func (exec *taskExecutor) Start() error {
 				exec.log.Info("task: [%s] is completed", task)
 
 				err := task.AfterExecute(ctx)
-				if record, convErr := TaskToRecord(task); convErr == nil {
+				if record, convErr := TaskToRecord(table, task); convErr == nil {
 					err = errors.Join(err, table.Set(record))
 				}
 
@@ -165,7 +169,7 @@ func (exec *taskExecutor) Start() error {
 							}
 
 							if err == nil {
-								record, err = TaskToRecord(task)
+								record, err = TaskToRecord(table, task)
 							}
 
 							if err == nil {

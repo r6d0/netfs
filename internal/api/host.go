@@ -12,10 +12,11 @@ type RemoteHost struct {
 }
 
 // Returns information about file by path.
-func (host RemoteHost) OpenFile(client transport.TransportSender, file RemoteFile) (*RemoteFile, error) {
-	res, err := client.SendBodyAndReceive(host.IP, API.FileInfo(), file, &RemoteFile{})
+func (host RemoteHost) OpenFile(client transport.TransportSender, path string) (*RemoteFile, error) {
+	res, err := client.SendRawBodyAndReceive(host.IP, API.FileInfo(), []byte(path), &FileInfo{})
 	if err == nil {
-		return res.(*RemoteFile), nil
+		info := res.(*FileInfo)
+		return &RemoteFile{Info: *info, Host: host}, nil
 	}
 	return nil, err
 }

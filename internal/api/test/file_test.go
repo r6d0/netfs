@@ -24,7 +24,7 @@ func TestWriteSuccess(t *testing.T) {
 		})
 		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
-				api.RemoteFile{Info: api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024}, Host: local},
+				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
 			)
 
 			w.Write(data)
@@ -35,7 +35,7 @@ func TestWriteSuccess(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	file, _ := host.OpenFile(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file.txt"}})
+	file, _ := host.OpenFile(network.Transport(), "./test_file.txt")
 	err := file.Write(network.Transport(), []byte("TEST"))
 	if err != nil {
 		t.Fatal("error should be nil")
@@ -56,7 +56,7 @@ func TestWriteResponseError(t *testing.T) {
 		})
 		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
-				api.RemoteFile{Info: api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024}, Host: local},
+				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
 			)
 
 			w.Write(data)
@@ -66,7 +66,7 @@ func TestWriteResponseError(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	file, _ := host.OpenFile(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file.txt"}})
+	file, _ := host.OpenFile(network.Transport(), "./test_file.txt")
 	err := file.Write(network.Transport(), []byte("TEST"))
 	if err == nil {
 		t.Fatal("error should be not nil")
@@ -87,7 +87,7 @@ func TestCreateSuccess(t *testing.T) {
 		})
 		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
-				api.RemoteFile{Info: api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024}, Host: local},
+				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
 			)
 
 			w.Write(data)
@@ -98,7 +98,7 @@ func TestCreateSuccess(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	file, _ := host.OpenFile(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file.txt"}})
+	file, _ := host.OpenFile(network.Transport(), "./test_file.txt")
 	err := file.Create(network.Transport())
 	if err != nil {
 		t.Fatal("error should be nil")
@@ -119,7 +119,7 @@ func TestCreateResponseError(t *testing.T) {
 		})
 		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
-				api.RemoteFile{Info: api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024}, Host: local},
+				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
 			)
 
 			w.Write(data)
@@ -129,7 +129,7 @@ func TestCreateResponseError(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	file, _ := host.OpenFile(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file.txt"}})
+	file, _ := host.OpenFile(network.Transport(), "./test_file.txt")
 	err := file.Create(network.Transport())
 	if err == nil {
 		t.Fatal("error should be not nil")
@@ -150,7 +150,7 @@ func TestCopyToSuccess(t *testing.T) {
 		})
 		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
-				api.RemoteFile{Info: api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024}, Host: local},
+				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
 			)
 
 			w.Write(data)
@@ -161,7 +161,7 @@ func TestCopyToSuccess(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	file, _ := host.OpenFile(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file.txt"}})
+	file, _ := host.OpenFile(network.Transport(), "./test_file.txt")
 	err := file.CopyTo(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file_1.txt"}})
 	if err != nil {
 		t.Fatal("error should be nil")
@@ -182,7 +182,7 @@ func TestCopyToResponseError(t *testing.T) {
 		})
 		mux.HandleFunc(api.API.FileInfo()[0], func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(
-				api.RemoteFile{Info: api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024}, Host: local},
+				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
 			)
 
 			w.Write(data)
@@ -192,7 +192,7 @@ func TestCopyToResponseError(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	file, _ := host.OpenFile(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file.txt"}})
+	file, _ := host.OpenFile(network.Transport(), "./test_file.txt")
 	err := file.CopyTo(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file_1.txt"}})
 	if err == nil {
 		t.Fatal("error should be not nil")

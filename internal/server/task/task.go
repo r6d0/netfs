@@ -5,6 +5,7 @@ import (
 	"netfs/internal/api/transport"
 	"netfs/internal/logger"
 	"netfs/internal/server/database"
+	"netfs/internal/server/volume"
 	"time"
 )
 
@@ -48,6 +49,7 @@ const (
 
 // The context for the task.
 type TaskExecuteContext struct {
+	Volumes   volume.VolumeManager
 	Transport transport.TransportSender
 	Config    TaskExecuteConfig
 }
@@ -84,14 +86,15 @@ type TaskExecutor interface {
 	Stop() error
 }
 
-func NewTaskExecutor(config TaskExecuteConfig, db database.Database, transport transport.TransportSender, log *logger.Logger) (TaskExecutor, error) {
-	return &taskExecutor{config: config, log: log, db: db, transport: transport, cancel: make(chan bool)}, nil
+func NewTaskExecutor(config TaskExecuteConfig, db database.Database, volumes volume.VolumeManager, transport transport.TransportSender, log *logger.Logger) (TaskExecutor, error) {
+	return &taskExecutor{config: config, log: log, db: db, volumes: volumes, transport: transport, cancel: make(chan bool)}, nil
 }
 
 type taskExecutor struct {
 	config    TaskExecuteConfig
 	log       *logger.Logger
 	db        database.Database
+	volumes   volume.VolumeManager
 	transport transport.TransportSender
 	cancel    chan bool
 }
@@ -101,7 +104,7 @@ func (exec *taskExecutor) Submit(task Task) (uint64, error) {
 	var record database.Record
 
 	log := exec.log
-	err := task.Init(TaskExecuteContext{Config: exec.config, Transport: exec.transport})
+	err := task.Init(TaskExecuteContext{Config: exec.config, Transport: exec.transport, Volumes: exec.volumes})
 	if err == nil {
 		table := exec.db.Table(TaskTable)
 		if record, err = TaskToRecord(table, task); err == nil {
@@ -128,7 +131,7 @@ func (exec *taskExecutor) Start() error {
 	go func(cancel chan bool) {
 		available := maxAvailableTasks
 		complete := make(chan Task)
-		ctx := TaskExecuteContext{Config: exec.config, Transport: exec.transport}
+		ctx := TaskExecuteContext{Config: exec.config, Transport: exec.transport, Volumes: exec.volumes}
 		condition := database.Eq(Status, []byte{byte(Waiting)})
 
 		cancelled := false

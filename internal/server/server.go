@@ -75,10 +75,10 @@ func NewServer(config ServerConfig) (*Server, error) {
 	if err == nil {
 		var receiver transport.TransportReceiver
 		if receiver, err = transport.NewReceiver(config.Network.Protocol, config.Network.Port); err == nil {
-			var tasks task.TaskExecutor
-			if tasks, err = task.NewTaskExecutor(config.Task, db, network.Transport(), log); err == nil {
-				var volumes volume.VolumeManager
-				if volumes, err = volume.NewVolumeManager(db); err == nil {
+			var volumes volume.VolumeManager
+			if volumes, err = volume.NewVolumeManager(db); err == nil {
+				var tasks task.TaskExecutor
+				if tasks, err = task.NewTaskExecutor(config.Task, db, volumes, network.Transport(), log); err == nil {
 					stop := make(chan os.Signal, 1)
 					signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 

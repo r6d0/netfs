@@ -104,6 +104,7 @@ func (vl *volume) Read(path string, offset int64, size int64) ([]byte, error) {
 		records, err := table.Get(database.Eq(FilePath, []byte(path)))
 		if err == nil {
 			if len(records) == 1 {
+				fileSize := records[0].GetUint64(FileSize)
 				fileOsPath := string(records[0].GetField(FileOsPath))
 
 				var file *os.File
@@ -111,7 +112,7 @@ func (vl *volume) Read(path string, offset int64, size int64) ([]byte, error) {
 					defer file.Close() // TODO. Add file to cache
 
 					read := 0
-					data := make([]byte, size)
+					data := make([]byte, min(size, int64(fileSize)))
 					read, err = file.ReadAt(data, offset)
 					if err == nil || errors.Is(err, io.EOF) {
 						return data[:read], nil

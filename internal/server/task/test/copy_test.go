@@ -9,7 +9,9 @@ import (
 	"netfs/internal/api/transport"
 	"netfs/internal/server/database"
 	"netfs/internal/server/task"
+	"netfs/internal/server/volume"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -58,7 +60,8 @@ func TestCopyTaskFromRecord(t *testing.T) {
 
 func TestExecuteSuccess(t *testing.T) {
 	generated := generate(100) // 100 bytes
-	os.WriteFile("./TestExecuteSuccess", generated, os.ModeAppend)
+	osPath, _ := filepath.Abs("./TestExecuteSuccess")
+	os.WriteFile(osPath, generated, os.ModeAppend)
 
 	client := transport.CallbackTransport{Callback: func(ip net.IP, tp transport.TransportPoint, data []byte, result any) (any, error) {
 		if tp[0] == api.API.FileWrite("")[0] {
@@ -70,18 +73,39 @@ func TestExecuteSuccess(t *testing.T) {
 	}}
 	config := task.TaskExecuteConfig{Copy: task.TaskCopyConfig{BufferSize: 1024}} // 1024 bytes
 
-	copyTask := &task.CopyTask{Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{Info: api.FileInfo{FilePath: "./TestExecuteSuccess"}}, Target: api.RemoteFile{}}
-	err := copyTask.Execute(task.TaskExecuteContext{Transport: &client, Config: config})
+	db := database.NewDatabase(database.DatabaseConfig{})
+	vlTable := db.Table(volume.VolumeTable)
+	vlRecord := database.NewRecord(3)
+	vlRecord.SetRecordId(vlTable.NextId())
+	vlRecord.SetField(volume.VolumeName, []byte("root"))
+	vlRecord.SetField(volume.VolumePath, []byte("./"))
+	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
+	vlTable.Set(vlRecord)
+
+	flTable := db.Table(volume.VolumeFileTable)
+	flRecord := database.NewRecord(5)
+	flRecord.SetField(volume.FileName, []byte("TestExecuteSuccess"))
+	flRecord.SetField(volume.FilePath, []byte("root:/TestExecuteSuccess"))
+	flRecord.SetUint64(volume.FileSize, uint64(len(generated)))
+	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
+	flRecord.SetField(volume.FileOsPath, []byte(osPath))
+	flTable.Set(flRecord)
+
+	manager, _ := volume.NewVolumeManager(db)
+
+	copyTask := &task.CopyTask{Status: task.Completed, Type: task.Copy, Offset: 0, Source: api.RemoteFile{Info: api.FileInfo{FilePath: "root:/TestExecuteSuccess"}}, Target: api.RemoteFile{}}
+	err := copyTask.Execute(task.TaskExecuteContext{Transport: &client, Config: config, Volumes: manager})
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	os.RemoveAll("./TestExecuteSuccess")
+	os.RemoveAll(osPath)
 }
 
 func TestExecuteChunkSuccess(t *testing.T) {
 	generated := generate(100) // 100 bytes
-	os.WriteFile("./TestExecuteChunkSuccess", generated, os.ModeAppend)
+	osPath, _ := filepath.Abs("./TestExecuteChunkSuccess")
+	os.WriteFile(osPath, generated, os.ModeAppend)
 
 	config := task.TaskExecuteConfig{Copy: task.TaskCopyConfig{BufferSize: 10}} // 10 bytes
 	client := transport.CallbackTransport{Callback: func(ip net.IP, tp transport.TransportPoint, data []byte, result any) (any, error) {
@@ -93,13 +117,33 @@ func TestExecuteChunkSuccess(t *testing.T) {
 		return nil, nil
 	}}
 
-	copyTask := &task.CopyTask{Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{Info: api.FileInfo{FilePath: "./TestExecuteChunkSuccess"}}, Target: api.RemoteFile{}}
-	err := copyTask.Execute(task.TaskExecuteContext{Transport: &client, Config: config})
+	db := database.NewDatabase(database.DatabaseConfig{})
+	vlTable := db.Table(volume.VolumeTable)
+	vlRecord := database.NewRecord(3)
+	vlRecord.SetRecordId(vlTable.NextId())
+	vlRecord.SetField(volume.VolumeName, []byte("root"))
+	vlRecord.SetField(volume.VolumePath, []byte("./"))
+	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
+	vlTable.Set(vlRecord)
+
+	flTable := db.Table(volume.VolumeFileTable)
+	flRecord := database.NewRecord(5)
+	flRecord.SetField(volume.FileName, []byte("TestExecuteChunkSuccess"))
+	flRecord.SetField(volume.FilePath, []byte("root:/TestExecuteChunkSuccess"))
+	flRecord.SetUint64(volume.FileSize, uint64(len(generated)))
+	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
+	flRecord.SetField(volume.FileOsPath, []byte(osPath))
+	flTable.Set(flRecord)
+
+	manager, _ := volume.NewVolumeManager(db)
+
+	copyTask := &task.CopyTask{Status: task.Completed, Type: task.Copy, Offset: 0, Source: api.RemoteFile{Info: api.FileInfo{FilePath: "root:/TestExecuteChunkSuccess"}}, Target: api.RemoteFile{}}
+	err := copyTask.Execute(task.TaskExecuteContext{Transport: &client, Config: config, Volumes: manager})
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	os.RemoveAll("./TestExecuteChunkSuccess")
+	os.RemoveAll(osPath)
 }
 
 func TestExecuteFailure(t *testing.T) {
@@ -111,8 +155,11 @@ func TestExecuteFailure(t *testing.T) {
 		return nil, nil
 	}}
 
+	db := database.NewDatabase(database.DatabaseConfig{})
+	manager, _ := volume.NewVolumeManager(db)
+
 	copyTask := &task.CopyTask{Status: task.Completed, Type: task.Copy, Offset: 555, Source: api.RemoteFile{}, Target: api.RemoteFile{}}
-	err := copyTask.Execute(task.TaskExecuteContext{Transport: &client, Config: config})
+	err := copyTask.Execute(task.TaskExecuteContext{Transport: &client, Config: config, Volumes: manager})
 	if err == nil {
 		t.Fatalf("error should be not nil")
 	}

@@ -2,15 +2,13 @@ package task
 
 import (
 	"encoding/json"
-	"errors"
-	"io"
 	"netfs/internal/api"
 	"netfs/internal/server/database"
-	"os"
+	"netfs/internal/server/volume"
 )
 
 type TaskCopyConfig struct {
-	BufferSize uint64
+	BufferSize int64
 }
 
 // The task of copying the file.
@@ -45,28 +43,21 @@ func (task *CopyTask) Execute(ctx TaskExecuteContext) error {
 
 	err := target.Create(ctx.Transport)
 	if err == nil {
-		var file *os.File
-		if file, err = os.Open(source.Info.FilePath); err == nil { // TODO. Use volume.OpenFile(source.Path) for reuse the opened file already
-			defer file.Close()
+		size := config.BufferSize
+		path := source.Info.FilePath
 
-			var info os.FileInfo
-			if info, err = file.Stat(); err == nil {
-				fileSize := uint64(info.Size())
-				bufferSize := min(fileSize, config.BufferSize)
-				if fileSize > 0 && bufferSize > 0 {
-					buffer := make([]byte, bufferSize)
-
-					var size int
-					if size, err = file.ReadAt(buffer, task.Offset); err == nil {
-						if err = target.Write(ctx.Transport, buffer[:size]); err == nil {
-							task.Status = Waiting
-							task.Offset += int64(size)
-						}
-					} else if errors.Is(err, io.EOF) {
-						err = nil
-						task.Status = Completed
-					}
+		var vl volume.Volume
+		if vl, err = ctx.Volumes.Volume(path); err == nil {
+			var buffer []byte
+			if buffer, err = vl.Read(path, task.Offset, size); err == nil {
+				if err = target.Write(ctx.Transport, buffer); err == nil {
+					task.Status = Waiting
+					task.Offset += int64(len(buffer))
 				}
+			}
+
+			if len(buffer) < int(size) {
+				task.Status = Completed
 			}
 		}
 	}

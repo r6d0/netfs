@@ -128,7 +128,23 @@ func (vl *volume) Read(path string, offset int64, size int64) ([]byte, error) {
 
 func (vl *volume) Write(path string, data []byte) error {
 	if vl.perm&Write != 0 {
-		// TODO. Write logic
+		table := vl.db.Table(VolumeFileTable)
+		records, err := table.Get(database.Eq(FilePath, []byte(path)))
+		if err == nil {
+			if len(records) == 1 {
+				fileOsPath := string(records[0].GetField(FileOsPath))
+
+				var file *os.File
+				if file, err = os.OpenFile(fileOsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+					defer file.Close() // TODO. Add file to cache
+
+					_, err = file.Write(data)
+				}
+			} else {
+				err = ErrFileNotFound
+			}
+		}
+		return err
 	}
 	return ErrWriteIsNotPermitted
 }

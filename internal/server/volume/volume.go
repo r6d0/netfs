@@ -2,8 +2,10 @@ package volume
 
 import (
 	"errors"
+	"io"
 	"netfs/internal/api"
 	"netfs/internal/server/database"
+	"os"
 	"strings"
 )
 
@@ -28,6 +30,7 @@ const (
 	FilePath
 	FileSize
 	FileType
+	FileOsPath
 )
 
 // If the file is not found.
@@ -97,7 +100,28 @@ func (vl *volume) Info(path string) (*api.FileInfo, error) {
 
 func (vl *volume) Read(path string, offset int64, size int64) ([]byte, error) {
 	if vl.perm&Read != 0 {
-		// TODO. Read logic
+		table := vl.db.Table(VolumeFileTable)
+		records, err := table.Get(database.Eq(FilePath, []byte(path)))
+		if err == nil {
+			if len(records) == 1 {
+				fileOsPath := string(records[0].GetField(FileOsPath))
+
+				var file *os.File
+				if file, err = os.Open(fileOsPath); err == nil {
+					defer file.Close() // TODO. Add file to cache
+
+					read := 0
+					data := make([]byte, size)
+					read, err = file.ReadAt(data, offset)
+					if err == nil || errors.Is(err, io.EOF) {
+						return data[:read], nil
+					}
+				}
+			} else {
+				err = ErrFileNotFound
+			}
+		}
+		return nil, err
 	}
 	return nil, ErrReadIsNotPermitted
 }
@@ -127,10 +151,12 @@ func NewVolumeManager(db database.Database) (VolumeManager, error) {
 
 	flTable := db.Table(VolumeFileTable)
 	flRecord := database.NewRecord(5)
+	flRecord.SetRecordId(flTable.NextId())
 	flRecord.SetField(FileName, []byte("myfile.txt"))
 	flRecord.SetField(FilePath, []byte("root:/myfile.txt"))
 	flRecord.SetUint64(FileSize, 100)
 	flRecord.SetUint8(FileType, uint8(api.FILE))
+	flRecord.SetField(FileOsPath, []byte("./myfile.txt"))
 	flTable.Set(flRecord)
 
 	records, err := vlTable.Get()

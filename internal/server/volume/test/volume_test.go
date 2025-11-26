@@ -1,9 +1,12 @@
 package volume_test
 
 import (
+	"bytes"
 	"netfs/internal/api"
 	"netfs/internal/server/database"
 	"netfs/internal/server/volume"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -90,4 +93,59 @@ func TestInfoSuccess(t *testing.T) {
 	if info == nil {
 		t.Fatal("info should be not nil")
 	}
+}
+
+func TestReadSuccess(t *testing.T) {
+	generated := generate(100) // 100 bytes
+	osPath, _ := filepath.Abs("./TestStartSuccess")
+	os.WriteFile(osPath, generated, os.ModeAppend)
+
+	db := database.NewDatabase(database.DatabaseConfig{})
+
+	vlTable := db.Table(volume.VolumeTable)
+	vlRecord := database.NewRecord(3)
+	vlRecord.SetRecordId(vlTable.NextId())
+	vlRecord.SetField(volume.VolumeName, []byte("root"))
+	vlRecord.SetField(volume.VolumePath, []byte("./"))
+	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
+	vlTable.Set(vlRecord)
+
+	flTable := db.Table(volume.VolumeFileTable)
+	flRecord := database.NewRecord(5)
+	flRecord.SetRecordId(flTable.NextId())
+	flRecord.SetField(volume.FileName, []byte("TestReadSuccess"))
+	flRecord.SetField(volume.FilePath, []byte("root:/TestReadSuccess"))
+	flRecord.SetUint64(volume.FileSize, uint64(len(generated)))
+	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
+	flRecord.SetField(volume.FileOsPath, []byte(osPath))
+	flTable.Set(flRecord)
+
+	manager, _ := volume.NewVolumeManager(db)
+	vl, _ := manager.Volume("root")
+
+	data, err := vl.Read("root:/TestReadSuccess", 0, int64(len(generated)))
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	if !bytes.Equal(generated, data) {
+		t.Fatalf("the data should be equal to the generated")
+	}
+
+	data, err = vl.Read("root:/TestReadSuccess", int64(len(generated)/2), int64(len(generated)))
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	if !bytes.Equal(generated[:len(generated)/2], data) {
+		t.Fatalf("the data should be equal to the generated")
+	}
+}
+
+func generate(size int) []byte {
+	result := make([]byte, size)
+	for i := range size {
+		result[i] = byte(1)
+	}
+	return result
 }

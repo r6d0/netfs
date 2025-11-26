@@ -60,6 +60,7 @@ func TestCopyTaskFromRecord(t *testing.T) {
 
 func TestExecuteSuccess(t *testing.T) {
 	generated := generate(100) // 100 bytes
+	vlOsPath, _ := filepath.Abs("./")
 	osPath, _ := filepath.Abs("./TestExecuteSuccess")
 	os.WriteFile(osPath, generated, os.ModeAppend)
 
@@ -78,7 +79,7 @@ func TestExecuteSuccess(t *testing.T) {
 	vlRecord := database.NewRecord(3)
 	vlRecord.SetRecordId(vlTable.NextId())
 	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte("./"))
+	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
 	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
 	vlTable.Set(vlRecord)
 
@@ -88,7 +89,6 @@ func TestExecuteSuccess(t *testing.T) {
 	flRecord.SetField(volume.FilePath, []byte("root:/TestExecuteSuccess"))
 	flRecord.SetUint64(volume.FileSize, uint64(len(generated)))
 	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
-	flRecord.SetField(volume.FileOsPath, []byte(osPath))
 	flTable.Set(flRecord)
 
 	manager, _ := volume.NewVolumeManager(db)
@@ -104,6 +104,7 @@ func TestExecuteSuccess(t *testing.T) {
 
 func TestExecuteChunkSuccess(t *testing.T) {
 	generated := generate(100) // 100 bytes
+	vlOsPath, _ := filepath.Abs("./")
 	osPath, _ := filepath.Abs("./TestExecuteChunkSuccess")
 	os.WriteFile(osPath, generated, os.ModeAppend)
 
@@ -122,7 +123,7 @@ func TestExecuteChunkSuccess(t *testing.T) {
 	vlRecord := database.NewRecord(3)
 	vlRecord.SetRecordId(vlTable.NextId())
 	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte("./"))
+	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
 	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
 	vlTable.Set(vlRecord)
 
@@ -132,7 +133,6 @@ func TestExecuteChunkSuccess(t *testing.T) {
 	flRecord.SetField(volume.FilePath, []byte("root:/TestExecuteChunkSuccess"))
 	flRecord.SetUint64(volume.FileSize, uint64(len(generated)))
 	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
-	flRecord.SetField(volume.FileOsPath, []byte(osPath))
 	flTable.Set(flRecord)
 
 	manager, _ := volume.NewVolumeManager(db)

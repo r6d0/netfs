@@ -6,6 +6,7 @@ import (
 	"netfs/internal/api"
 	"netfs/internal/server/database"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -30,7 +31,6 @@ const (
 	FilePath
 	FileSize
 	FileType
-	FileOsPath
 )
 
 // If the file is not found.
@@ -61,6 +61,7 @@ type Volume interface {
 	Info(string) (*api.FileInfo, error)
 	Read(string, int64, int64) ([]byte, error)
 	Write(string, []byte) error
+	ResolvePath(string) string
 }
 
 type volume struct {
@@ -105,7 +106,7 @@ func (vl *volume) Read(path string, offset int64, size int64) ([]byte, error) {
 		if err == nil {
 			if len(records) == 1 {
 				fileSize := records[0].GetUint64(FileSize)
-				fileOsPath := string(records[0].GetField(FileOsPath))
+				fileOsPath := vl.ResolvePath(string(records[0].GetField(FilePath)))
 
 				var file *os.File
 				if file, err = os.Open(fileOsPath); err == nil {
@@ -133,7 +134,7 @@ func (vl *volume) Write(path string, data []byte) error {
 		records, err := table.Get(database.Eq(FilePath, []byte(path)))
 		if err == nil {
 			if len(records) == 1 {
-				fileOsPath := string(records[0].GetField(FileOsPath))
+				fileOsPath := vl.ResolvePath(string(records[0].GetField(FilePath)))
 
 				var file *os.File
 				if file, err = os.OpenFile(fileOsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
@@ -148,6 +149,15 @@ func (vl *volume) Write(path string, data []byte) error {
 		return err
 	}
 	return ErrWriteIsNotPermitted
+}
+
+func (vl *volume) ResolvePath(original string) string {
+	prefix := vl.Name() + volumeSeparator
+	if strings.HasPrefix(original, prefix) {
+		path, _ := strings.CutPrefix(original, prefix)
+		return filepath.Join(vl.Path(), path)
+	}
+	return original
 }
 
 // Abstraction for working with volumes.
@@ -173,7 +183,6 @@ func NewVolumeManager(db database.Database) (VolumeManager, error) {
 	flRecord.SetField(FilePath, []byte("root:/myfile.txt"))
 	flRecord.SetUint64(FileSize, 100)
 	flRecord.SetUint8(FileType, uint8(api.FILE))
-	flRecord.SetField(FileOsPath, []byte("./myfile.txt"))
 	flTable.Set(flRecord)
 
 	records, err := vlTable.Get()

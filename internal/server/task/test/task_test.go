@@ -38,6 +38,7 @@ func TestSubmitSuccess(t *testing.T) {
 
 func TestStartSuccess(t *testing.T) {
 	generated := generate(100) // 100 bytes
+	vlOsPath, _ := filepath.Abs("./")
 	osPath, _ := filepath.Abs("./TestStartSuccess")
 	os.WriteFile(osPath, generated, os.ModeAppend)
 	client := transport.CallbackTransport{Callback: func(ip net.IP, tp transport.TransportPoint, data []byte, result any) (any, error) {
@@ -56,7 +57,7 @@ func TestStartSuccess(t *testing.T) {
 	vlRecord := database.NewRecord(3)
 	vlRecord.SetRecordId(vlTable.NextId())
 	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte("./"))
+	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
 	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
 	vlTable.Set(vlRecord)
 
@@ -66,7 +67,6 @@ func TestStartSuccess(t *testing.T) {
 	flRecord.SetField(volume.FilePath, []byte("root:/TestStartSuccess"))
 	flRecord.SetUint64(volume.FileSize, uint64(len(generated)))
 	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
-	flRecord.SetField(volume.FileOsPath, []byte(osPath))
 	flTable.Set(flRecord)
 
 	volumes, _ := volume.NewVolumeManager(db)

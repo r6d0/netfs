@@ -58,7 +58,7 @@ func TestVolumeErrVolumeNotFound(t *testing.T) {
 	db := database.NewDatabase(database.DatabaseConfig{})
 
 	manager, _ := volume.NewVolumeManager(db)
-	_, err := manager.Volume("root")
+	_, err := manager.Volume("TestVolumeErrVolumeNotFound")
 	if err != volume.ErrVolumeNotFound {
 		t.Fatalf("error should be [%s], but err is [%s]", volume.ErrVolumeNotFound, err)
 	}
@@ -67,18 +67,20 @@ func TestVolumeErrVolumeNotFound(t *testing.T) {
 func TestInfoSuccess(t *testing.T) {
 	db := database.NewDatabase(database.DatabaseConfig{})
 
+	vlOsPath, _ := filepath.Abs("./")
+
 	vlTable := db.Table(volume.VolumeTable)
 	vlRecord := database.NewRecord(3)
 	vlRecord.SetRecordId(vlTable.NextId())
 	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte("./"))
+	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
 	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
 	vlTable.Set(vlRecord)
 
 	flTable := db.Table(volume.VolumeFileTable)
 	flRecord := database.NewRecord(5)
-	flRecord.SetField(volume.FileName, []byte("myfile.txt"))
-	flRecord.SetField(volume.FilePath, []byte("root:/myfile.txt"))
+	flRecord.SetField(volume.FileName, []byte("TestInfoSuccess"))
+	flRecord.SetField(volume.FilePath, []byte("root:/TestInfoSuccess"))
 	flRecord.SetUint64(volume.FileSize, 100)
 	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
 	flTable.Set(flRecord)
@@ -86,7 +88,7 @@ func TestInfoSuccess(t *testing.T) {
 	manager, _ := volume.NewVolumeManager(db)
 	vl, _ := manager.Volume("root")
 
-	info, err := vl.Info("root:/myfile.txt")
+	info, err := vl.Info("root:/TestInfoSuccess")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -98,7 +100,8 @@ func TestInfoSuccess(t *testing.T) {
 
 func TestReadSuccess(t *testing.T) {
 	generated := generate(100) // 100 bytes
-	osPath, _ := filepath.Abs("./TestStartSuccess")
+	vlOsPath, _ := filepath.Abs("./")
+	osPath, _ := filepath.Abs("./TestReadSuccess")
 	os.WriteFile(osPath, generated, os.ModeAppend)
 
 	db := database.NewDatabase(database.DatabaseConfig{})
@@ -107,7 +110,7 @@ func TestReadSuccess(t *testing.T) {
 	vlRecord := database.NewRecord(3)
 	vlRecord.SetRecordId(vlTable.NextId())
 	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte("./"))
+	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
 	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
 	vlTable.Set(vlRecord)
 
@@ -118,7 +121,6 @@ func TestReadSuccess(t *testing.T) {
 	flRecord.SetField(volume.FilePath, []byte("root:/TestReadSuccess"))
 	flRecord.SetUint64(volume.FileSize, uint64(len(generated)))
 	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
-	flRecord.SetField(volume.FileOsPath, []byte(osPath))
 	flTable.Set(flRecord)
 
 	manager, _ := volume.NewVolumeManager(db)
@@ -147,6 +149,7 @@ func TestReadSuccess(t *testing.T) {
 
 func TestWriteSuccess(t *testing.T) {
 	generated := generate(100) // 100 bytes
+	vlOsPath, _ := filepath.Abs("./")
 	osPath, _ := filepath.Abs("./TestWriteSuccess")
 
 	db := database.NewDatabase(database.DatabaseConfig{})
@@ -155,7 +158,7 @@ func TestWriteSuccess(t *testing.T) {
 	vlRecord := database.NewRecord(3)
 	vlRecord.SetRecordId(vlTable.NextId())
 	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte("./"))
+	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
 	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
 	vlTable.Set(vlRecord)
 
@@ -166,7 +169,6 @@ func TestWriteSuccess(t *testing.T) {
 	flRecord.SetField(volume.FilePath, []byte("root:/TestWriteSuccess"))
 	flRecord.SetUint64(volume.FileSize, uint64(len(generated)))
 	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
-	flRecord.SetField(volume.FileOsPath, []byte(osPath))
 	flTable.Set(flRecord)
 
 	manager, _ := volume.NewVolumeManager(db)
@@ -185,6 +187,38 @@ func TestWriteSuccess(t *testing.T) {
 
 	file.Close()
 	os.RemoveAll(osPath)
+}
+
+func TestResolvePathSuccess(t *testing.T) {
+	vlOsPath, _ := filepath.Abs("./")
+	osPath, _ := filepath.Abs("./TestWriteSuccess")
+
+	db := database.NewDatabase(database.DatabaseConfig{})
+
+	vlTable := db.Table(volume.VolumeTable)
+	vlRecord := database.NewRecord(3)
+	vlRecord.SetRecordId(vlTable.NextId())
+	vlRecord.SetField(volume.VolumeName, []byte("root"))
+	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
+	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
+	vlTable.Set(vlRecord)
+
+	flTable := db.Table(volume.VolumeFileTable)
+	flRecord := database.NewRecord(5)
+	flRecord.SetRecordId(flTable.NextId())
+	flRecord.SetField(volume.FileName, []byte("TestWriteSuccess"))
+	flRecord.SetField(volume.FilePath, []byte("root:/TestWriteSuccess"))
+	flRecord.SetUint64(volume.FileSize, 100)
+	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
+	flTable.Set(flRecord)
+
+	manager, _ := volume.NewVolumeManager(db)
+	vl, _ := manager.Volume("root")
+
+	path := vl.ResolvePath("root:/TestWriteSuccess")
+	if path != osPath {
+		t.Fatalf("path should be [%s], but it is [%s]", osPath, path)
+	}
 }
 
 func generate(size int) []byte {

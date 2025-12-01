@@ -37,6 +37,8 @@ func (srv *Server) Start() error {
 	srv.receiver.Receive(api.API.ServerStop(), srv.StopServerHandle)
 	srv.receiver.ReceiveRawBodyAndSend(api.API.ServerHost(), srv.ServerHostHandle)
 	srv.receiver.ReceiveRawBodyAndSend(api.API.FileInfo(), srv.FileInfoHandle)
+	srv.receiver.ReceiveBody(api.API.FileCreate(), func() any { return &api.FileInfo{} }, srv.FileCreateHandle)
+	srv.receiver.ReceiveBodyAndSend(api.API.FileCopyStart(), func() any { return []api.RemoteFile{} }, srv.FileCopyStartHandle)
 
 	dbErr := srv.db.Start()
 	recErr := srv.receiver.Start()
@@ -108,6 +110,20 @@ func (srv *Server) FileInfoHandle(data []byte) (any, error) {
 		return volume.Info(path)
 	}
 	return nil, err
+}
+
+// Creates new file or directory by api.FileInfo.
+func (srv *Server) FileCreateHandle(data any) error {
+	info := data.(*api.FileInfo)
+	volume, err := srv.volumes.Volume(info.FilePath)
+	if err == nil {
+		err = volume.Create(info)
+	}
+	return err
+}
+
+func (srv *Server) FileCopyStartHandle(data any) (any, error) {
+	return nil, nil
 }
 
 // // Create directory.

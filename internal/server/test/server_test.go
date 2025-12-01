@@ -8,6 +8,8 @@ import (
 	"netfs/internal/server"
 	"netfs/internal/server/database"
 	"netfs/internal/server/task"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -104,5 +106,40 @@ func TestFileInfoHandleSuccess(t *testing.T) {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 	fmt.Println(info)
+	srv.Stop()
+}
+
+func TestFileCreateHandleSuccess(t *testing.T) {
+	osPath, _ := filepath.Abs("./dir1")
+	defer os.RemoveAll(osPath)
+
+	config := server.ServerConfig{
+		Network:  api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: time.Second * 5},
+		Log:      logger.LoggerConfig{Level: logger.Info},
+		Database: database.DatabaseConfig{Path: "./"},
+		Task:     task.TaskExecuteConfig{MaxAvailableTasks: 100, Copy: task.TaskCopyConfig{BufferSize: 1024}, TasksWaitingSecond: 100},
+	}
+
+	srv, err := server.NewServer(config)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	go func() {
+		srv.Start()
+	}()
+	time.Sleep(2 * time.Second)
+
+	network, _ := api.NewNetwork(config.Network)
+	err = network.Transport().SendBody(network.LocalIP(), api.API.FileCreate(), api.FileInfo{FileName: "TestFileCreateHandleSuccess", FilePath: "root:/dir1/TestFileCreateHandleSuccess", FileType: api.FILE})
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	_, err = os.Stat(filepath.Join(osPath, "TestFileCreateHandleSuccess"))
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
 	srv.Stop()
 }

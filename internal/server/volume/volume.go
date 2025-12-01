@@ -11,6 +11,7 @@ import (
 )
 
 const volumeSeparator = ":"
+const pathSeparator = "/"
 
 // The name of the volume table in the database.
 const VolumeTable = "volume"
@@ -59,6 +60,7 @@ type Volume interface {
 	Path() string
 	Perm() VolumePermition
 	Info(string) (*api.FileInfo, error)
+	Create(*api.FileInfo) error
 	Read(string, int64, int64) ([]byte, error)
 	Write(string, []byte) error
 	ResolvePath(string) string
@@ -97,6 +99,46 @@ func (vl *volume) Info(path string) (*api.FileInfo, error) {
 		return nil, err
 	}
 	return nil, ErrReadIsNotPermitted
+}
+
+func (vl *volume) Create(info *api.FileInfo) error {
+	if vl.perm&Write != 0 {
+		var err error
+
+		path := vl.ResolvePath(info.FilePath)
+		if info.FileType == api.DIRECTORY {
+			err = os.MkdirAll(path, 0755)
+		} else {
+			dir, _ := filepath.Split(path)
+			if err = os.MkdirAll(dir, 0755); err == nil {
+				var file *os.File
+				if file, err = os.Create(path); err == nil {
+					file.Close()
+				}
+			}
+		}
+
+		if err == nil {
+			table := vl.db.Table(VolumeFileTable)
+			records := []database.Record{fileInfoToRecord(table, info)}
+
+			end := vl.Name() + volumeSeparator
+			current := filepath.ToSlash(info.FilePath)
+			current, _ = filepath.Split(current)
+			current, _ = strings.CutSuffix(current, pathSeparator)
+			for current != end {
+				next, name := filepath.Split(current)
+				fileInfo := &api.FileInfo{FileName: name, FilePath: current, FileType: api.DIRECTORY}
+				records = append(records, fileInfoToRecord(table, fileInfo))
+
+				next, _ = strings.CutSuffix(next, pathSeparator)
+				current = next
+			}
+			err = table.Set(records...)
+		}
+		return err
+	}
+	return ErrWriteIsNotPermitted
 }
 
 func (vl *volume) Read(path string, offset int64, size int64) ([]byte, error) {
@@ -231,6 +273,16 @@ func volumeFromRecord(db database.Database, record database.Record) (Volume, err
 		perm: VolumePermition(record.GetUint8(VolumePerm)),
 		db:   db,
 	}, nil
+}
+
+func fileInfoToRecord(table database.Table, info *api.FileInfo) database.Record {
+	record := database.NewRecord(4)
+	record.SetRecordId(table.NextId())
+	record.SetField(FileName, []byte(info.FileName))
+	record.SetField(FilePath, []byte(info.FilePath))
+	record.SetUint8(FileType, uint8(info.FileType))
+	record.SetUint64(FileSize, uint64(info.FileSize))
+	return record
 }
 
 func fileInfoFromRecord(record database.Record) (*api.FileInfo, error) {

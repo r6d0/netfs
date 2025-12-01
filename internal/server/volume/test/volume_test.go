@@ -102,6 +102,8 @@ func TestReadSuccess(t *testing.T) {
 	generated := generate(100) // 100 bytes
 	vlOsPath, _ := filepath.Abs("./")
 	osPath, _ := filepath.Abs("./TestReadSuccess")
+	defer os.RemoveAll(osPath)
+
 	os.WriteFile(osPath, generated, os.ModeAppend)
 
 	db := database.NewDatabase(database.DatabaseConfig{})
@@ -143,14 +145,13 @@ func TestReadSuccess(t *testing.T) {
 	if !bytes.Equal(generated[:len(generated)/2], data) {
 		t.Fatalf("the data should be equal to the generated")
 	}
-
-	os.RemoveAll(osPath)
 }
 
 func TestWriteSuccess(t *testing.T) {
 	generated := generate(100) // 100 bytes
 	vlOsPath, _ := filepath.Abs("./")
 	osPath, _ := filepath.Abs("./TestWriteSuccess")
+	defer os.RemoveAll(osPath)
 
 	db := database.NewDatabase(database.DatabaseConfig{})
 
@@ -180,13 +181,12 @@ func TestWriteSuccess(t *testing.T) {
 	}
 
 	file, _ := os.Open(osPath)
+	defer file.Close()
+
 	data, _ := io.ReadAll(file)
 	if !bytes.Equal(generated, data) {
 		t.Fatalf("the data should be equal to the generated")
 	}
-
-	file.Close()
-	os.RemoveAll(osPath)
 }
 
 func TestResolvePathSuccess(t *testing.T) {
@@ -218,6 +218,80 @@ func TestResolvePathSuccess(t *testing.T) {
 	path := vl.ResolvePath("root:/TestWriteSuccess")
 	if path != osPath {
 		t.Fatalf("path should be [%s], but it is [%s]", osPath, path)
+	}
+}
+
+func TestCreateDirectorySuccess(t *testing.T) {
+	defer os.RemoveAll("./testDir1")
+
+	vlOsPath, _ := filepath.Abs("./")
+
+	db := database.NewDatabase(database.DatabaseConfig{})
+	vlTable := db.Table(volume.VolumeTable)
+	vlRecord := database.NewRecord(3)
+	vlRecord.SetRecordId(vlTable.NextId())
+	vlRecord.SetField(volume.VolumeName, []byte("root"))
+	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
+	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
+	vlTable.Set(vlRecord)
+
+	manager, _ := volume.NewVolumeManager(db)
+	vl, _ := manager.Volume("root")
+	err := vl.Create(&api.FileInfo{FileName: "testDir3", FilePath: "root:/testDir1/testDir2/testDir3", FileType: api.DIRECTORY})
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	_, err = os.Stat("./testDir1/testDir2/testDir3")
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	_, err = vl.Info("root:/testDir1/testDir2/testDir3")
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	_, err = vl.Info("root:/testDir1/testDir2")
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	_, err = vl.Info("root:/testDir1")
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+}
+
+func TestCreateFileSuccess(t *testing.T) {
+	defer os.RemoveAll("./testDir1")
+
+	vlOsPath, _ := filepath.Abs("./")
+
+	db := database.NewDatabase(database.DatabaseConfig{})
+	vlTable := db.Table(volume.VolumeTable)
+	vlRecord := database.NewRecord(3)
+	vlRecord.SetRecordId(vlTable.NextId())
+	vlRecord.SetField(volume.VolumeName, []byte("root"))
+	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
+	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
+	vlTable.Set(vlRecord)
+
+	manager, _ := volume.NewVolumeManager(db)
+	vl, _ := manager.Volume("root")
+	err := vl.Create(&api.FileInfo{FileName: "TestCreateFileSuccess", FilePath: "root:/testDir1/testDir2/testDir3/TestCreateFileSuccess", FileType: api.FILE})
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	_, err = os.Stat("./testDir1/testDir2/testDir3/TestCreateFileSuccess")
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	_, err = vl.Info("root:/testDir1/testDir2/testDir3/TestCreateFileSuccess")
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 }
 

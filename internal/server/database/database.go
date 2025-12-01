@@ -75,7 +75,7 @@ type queryCondition interface {
 
 type queryContext struct {
 	Conditions []queryCondition
-	Limit      uint16
+	Limit      int16
 }
 
 type Option interface {
@@ -116,14 +116,14 @@ func Eq(field RecordField, value []byte) Option {
 }
 
 type limitOption struct {
-	Limit uint16
+	Limit int16
 }
 
 func (opt *limitOption) apply(ctx *queryContext) {
 	ctx.Limit = opt.Limit
 }
 
-func Limit(limit uint16) Option {
+func Limit(limit int16) Option {
 	return &limitOption{Limit: limit}
 }
 
@@ -134,8 +134,8 @@ type Table interface {
 	NextId() uint64
 	// Returns records by options.
 	Get(...Option) ([]Record, error)
-	// Sets record to database.
-	Set(Record) error
+	// Sets records to database.
+	Set(...Record) error
 	// Deletes records by options.
 	Del(...Option) error
 }
@@ -165,12 +165,12 @@ func (tb *inMemoryTable) Get(options ...Option) ([]Record, error) {
 	tb.lock.RLock()
 	defer tb.lock.RUnlock()
 
-	ctx := &queryContext{}
+	ctx := &queryContext{Limit: -1}
 	for _, option := range options {
 		option.apply(ctx)
 	}
 
-	count := uint16(0)
+	count := int16(0)
 	result := []Record{}
 	for _, record := range tb.records {
 		match := true
@@ -191,18 +191,20 @@ func (tb *inMemoryTable) Get(options ...Option) ([]Record, error) {
 }
 
 // Sets record to database.
-func (tb *inMemoryTable) Set(record Record) error {
+func (tb *inMemoryTable) Set(records ...Record) error {
 	tb.lock.Lock()
 	defer tb.lock.Unlock()
 
-	for idx := range tb.records {
-		if tb.records[idx].GetRecordId() == record.GetRecordId() {
-			tb.records[idx] = record
-			return nil
+	for _, record := range records {
+		for idx := range tb.records {
+			if tb.records[idx].GetRecordId() == record.GetRecordId() {
+				tb.records[idx] = record
+				return nil
+			}
 		}
-	}
 
-	tb.records = append(tb.records, record)
+		tb.records = append(tb.records, record)
+	}
 	return nil
 }
 

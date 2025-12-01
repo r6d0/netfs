@@ -24,7 +24,7 @@ var ErrUnknownTaskType = errors.New("unknown a type of the task")
 // Tasks executor configuration.
 type TaskExecuteConfig struct {
 	Copy               TaskCopyConfig
-	MaxAvailableTasks  uint16
+	MaxAvailableTasks  int16
 	TasksWaitingSecond uint64
 }
 

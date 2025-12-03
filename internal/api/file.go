@@ -35,15 +35,28 @@ type RemoteFile struct {
 
 // Writes data to remote file.
 func (file RemoteFile) Write(client transport.TransportSender, data []byte) error {
-	return client.SendRawBody(file.Host.IP, API.FileWrite(file.Info.FilePath), data)
+	parameters := []string{Endpoints.FileWrite.Path, file.Info.FilePath}
+	req, err := client.NewRequest(file.Host.IP, Endpoints.FileWrite.Name, parameters, data, nil)
+	if err == nil {
+		_, err = client.Send(req)
+	}
+	return err
 }
 
 // Creates file or directory on remote host.
 func (file RemoteFile) Create(client transport.TransportSender) error {
-	return client.SendBody(file.Host.IP, API.FileCreate(), file)
+	req, err := client.NewRequest(file.Host.IP, Endpoints.FileCreate, nil, nil, file.Info)
+	if err == nil {
+		_, err = client.Send(req)
+	}
+	return err
 }
 
 // Copies the current file to the target file.
 func (file RemoteFile) CopyTo(client transport.TransportSender, target RemoteFile) error {
-	return client.SendBody(file.Host.IP, API.FileCopyStart(), []RemoteFile{file, target})
+	req, err := client.NewRequest(file.Host.IP, Endpoints.FileCopyStart, nil, nil, []RemoteFile{file, target})
+	if err == nil {
+		_, err = client.Send(req)
+	}
+	return err
 }

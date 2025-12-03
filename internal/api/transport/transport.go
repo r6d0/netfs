@@ -16,6 +16,24 @@ var ErrUnexpectedAnswer = errors.New("unexpected answer")
 
 type TransportPoint []string
 
+// Request data.
+type Request interface {
+	IP() net.IP
+	Endpoint() string
+	Param(string) string
+	Params() []string
+	RawBody() []byte
+	Body(any) (any, error)
+}
+
+// Response data.
+type Response interface {
+	IP() net.IP
+	Endpoint() string
+	RawBody() []byte
+	Body(any) (any, error)
+}
+
 // Available protocols.
 type TransportProtocol uint16
 
@@ -26,18 +44,10 @@ const (
 
 // Abstraction of the data sender.
 type TransportSender interface {
+	// Creates new request instance by parameters.
+	NewRequest(net.IP, string, []string, []byte, any) (Request, error)
 	// Sends request.
-	Send(net.IP, TransportPoint) error
-	// Sends request with body.
-	SendBody(net.IP, TransportPoint, any) error
-	// Sends request with raw body.
-	SendRawBody(net.IP, TransportPoint, []byte) error
-	// Sends request and receives response.
-	SendAndReceive(net.IP, TransportPoint, any) (any, error)
-	// Sends request with body and receives response.
-	SendBodyAndReceive(net.IP, TransportPoint, any, any) (any, error)
-	// Sends request with raw body and receives response.
-	SendRawBodyAndReceive(net.IP, TransportPoint, []byte, any) (any, error)
+	Send(Request) (Response, error)
 	// Returns protocol.
 	Protocol() TransportProtocol
 	// Returns port.
@@ -54,20 +64,14 @@ func NewSender(protocol TransportProtocol, port uint16, timeout time.Duration) (
 
 // Abstraction of the data receiver.
 type TransportReceiver interface {
+	// Creates new request instance by parameters.
+	NewRequest(net.IP, string, []string, []byte, any) (Request, error)
+	// Receives request.
+	Receive(string, func(Request) ([]byte, any, error))
 	// Starts receiver.
 	Start() error
 	// Stops receiver.
 	Stop() error
-	// Receives request.
-	Receive(TransportPoint, func() error)
-	// Receives request with body.
-	ReceiveBody(TransportPoint, func() any, func(any) error)
-	// Receives request with raw body.
-	ReceiveRawBody(TransportPoint, func([]byte) error)
-	// Receives request with body and sends response.
-	ReceiveBodyAndSend(TransportPoint, func() any, func(any) (any, error))
-	// Receives request with raw body and sends response.
-	ReceiveRawBodyAndSend(TransportPoint, func([]byte) (any, error))
 	// Returns protocol.
 	Protocol() TransportProtocol
 	// Returns port.

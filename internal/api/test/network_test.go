@@ -54,7 +54,7 @@ func TestGetHostSuccess(t *testing.T) {
 
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc(api.API.ServerHost()[0], func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(local)
 
 			w.Write(data)
@@ -113,7 +113,7 @@ func TestGetHostsSuccess(t *testing.T) {
 	go func() {
 		mux := http.NewServeMux()
 
-		mux.HandleFunc(api.API.ServerHost()[0], func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(local)
 
 			w.Write(data)

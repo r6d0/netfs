@@ -9,14 +9,71 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
 
-const ContentType = "Content-Type"
-const httpProtocol = "http"
-const protocolSeparator = "://"
 const portSeparator = ":"
+const httpProtocol = "http://"
+
+type httpRequest struct {
+	ip       net.IP
+	endpoint string
+	params   []string
+	rawBody  []byte
+}
+
+func (req *httpRequest) IP() net.IP {
+	return req.ip
+}
+
+func (req *httpRequest) Endpoint() string {
+	return req.endpoint
+}
+
+func (req *httpRequest) Param(name string) string {
+	for index, param := range req.params {
+		if param == name && index < len(req.params)-1 {
+			return req.params[index+1]
+		}
+	}
+	return ""
+}
+
+func (req *httpRequest) Params() []string {
+	return req.params
+}
+
+func (req *httpRequest) RawBody() []byte {
+	return req.rawBody
+}
+
+func (req *httpRequest) Body(target any) (any, error) {
+	return target, json.Unmarshal(req.rawBody, target)
+}
+
+type httpResponse struct {
+	ip       net.IP
+	endpoint string
+	rawBody  []byte
+}
+
+func (res *httpResponse) IP() net.IP {
+	return res.ip
+}
+
+func (res *httpResponse) Endpoint() string {
+	return res.endpoint
+}
+
+func (res *httpResponse) RawBody() []byte {
+	return res.rawBody
+}
+
+func (res *httpResponse) Body(target any) (any, error) {
+	return target, json.Unmarshal(res.rawBody, target)
+}
 
 // Sending data via the HTTP protocol.
 type HttpTransportSender struct {
@@ -24,60 +81,55 @@ type HttpTransportSender struct {
 	port   uint16
 }
 
-// Sends request.
-func (tr *HttpTransportSender) Send(ip net.IP, point TransportPoint) error {
-	_, err := tr.SendAndReceive(ip, point, nil)
-	return err
-}
-
-// Sends request with body.
-func (tr *HttpTransportSender) SendBody(ip net.IP, point TransportPoint, body any) error {
-	_, err := tr.SendBodyAndReceive(ip, point, body, nil)
-	return err
-}
-
-// Sends request with raw body.
-func (tr *HttpTransportSender) SendRawBody(ip net.IP, point TransportPoint, body []byte) error {
-	_, err := tr.SendRawBodyAndReceive(ip, point, body, nil)
-	return err
-}
-
-// Sends request and receives response.
-func (tr *HttpTransportSender) SendAndReceive(ip net.IP, point TransportPoint, result any) (any, error) {
-	return tr.SendRawBodyAndReceive(ip, point, nil, result)
-}
-
-// Sends request with body and receives response.
-func (tr *HttpTransportSender) SendBodyAndReceive(ip net.IP, point TransportPoint, body any, result any) (any, error) {
-	data, err := json.Marshal(body)
-	if err == nil {
-		return tr.SendRawBodyAndReceive(ip, point, data, result)
-	}
-	return nil, err
-}
-
-// Sends request with raw body and receives response.
-func (tr *HttpTransportSender) SendRawBodyAndReceive(ip net.IP, point TransportPoint, body []byte, result any) (any, error) {
-	var reader io.Reader
+// Creates new request instance by parameters.
+func (tr *HttpTransportSender) NewRequest(ip net.IP, endpoint string, parameters []string, rawBody []byte, body any) (Request, error) {
+	var err error
+	req := &httpRequest{ip: ip, endpoint: endpoint, params: parameters, rawBody: rawBody}
 	if body != nil {
+		req.rawBody, err = json.Marshal(body)
+	}
+	return req, err
+}
+
+// Sends request.
+func (tr *HttpTransportSender) Send(req Request) (Response, error) {
+	var reader io.Reader
+	if body := req.RawBody(); body != nil {
 		reader = bytes.NewReader(body)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, tr.buildURL(ip, point), reader)
+	endpoint, err := url.JoinPath(httpProtocol, req.IP().String())
 	if err == nil {
-		var res *http.Response
-		if res, err = tr.client.Do(req); err == nil {
-			defer res.Body.Close()
+		endpoint = strings.Join([]string{endpoint, strconv.Itoa(int(tr.Port()))}, portSeparator)
+		endpoint, err = url.JoinPath(endpoint, req.Endpoint())
+	}
 
-			if res.StatusCode == http.StatusOK {
-				if result != nil {
-					var data []byte
-					if data, err = io.ReadAll(res.Body); err == nil {
-						return result, json.Unmarshal(data, result)
+	if err == nil {
+		var httpReq *http.Request
+		if httpReq, err = http.NewRequest(http.MethodPost, endpoint, reader); err == nil {
+			if params := req.Params(); len(params) > 0 {
+				query := httpReq.URL.Query()
+				for index := range params {
+					if index%2 == 0 {
+						query.Add(params[index], params[index+1])
 					}
 				}
-			} else {
-				err = errors.Join(ErrUnexpectedAnswer, fmt.Errorf("status code is [%d]", res.StatusCode))
+			}
+
+			var httpRes *http.Response
+			if httpRes, err = tr.client.Do(httpReq); err == nil {
+				defer httpRes.Body.Close()
+
+				message, _ := io.ReadAll(httpRes.Body)
+				if httpRes.StatusCode == http.StatusOK {
+					return &httpResponse{ip: req.IP(), endpoint: req.Endpoint(), rawBody: message}, nil
+				} else {
+					if len(message) > 0 {
+						err = errors.Join(ErrUnexpectedAnswer, fmt.Errorf("status code is [%d], message is [%s]", httpRes.StatusCode, string(message)))
+					} else {
+						err = errors.Join(ErrUnexpectedAnswer, fmt.Errorf("status code is [%d]", httpRes.StatusCode))
+					}
+				}
 			}
 		}
 	}
@@ -94,23 +146,58 @@ func (tr *HttpTransportSender) Port() uint16 {
 	return tr.port
 }
 
-// Returns URL.
-func (tr HttpTransportSender) buildURL(ip net.IP, point TransportPoint) string { // TODO. Parse point
-	buffer := strings.Builder{}
-	buffer.WriteString(httpProtocol)
-	buffer.WriteString(protocolSeparator)
-	buffer.WriteString(ip.String())
-	buffer.WriteString(portSeparator)
-	buffer.WriteString(strconv.Itoa(int(tr.port)))
-	buffer.WriteString(point[0])
-	return buffer.String()
-}
-
 // Receiving data via the HTTP protocol.
 type HttpTransportReceiver struct {
 	port   uint16
 	mux    *http.ServeMux
 	server *http.Server
+}
+
+// Creates new request instance by parameters.
+func (tr *HttpTransportReceiver) NewRequest(ip net.IP, endpoint string, parameters []string, rawBody []byte, body any) (Request, error) {
+	var err error
+	req := &httpRequest{ip: ip, endpoint: endpoint, params: parameters, rawBody: rawBody}
+	if body != nil {
+		req.rawBody, err = json.Marshal(body)
+	}
+	return req, err
+}
+
+// Receives request.
+func (tr *HttpTransportReceiver) Receive(endpoint string, handle func(Request) ([]byte, any, error)) {
+	tr.mux.HandleFunc(endpoint, func(httpRes http.ResponseWriter, httpReq *http.Request) {
+		defer httpReq.Body.Close()
+
+		var rawResBody []byte
+		body, err := io.ReadAll(httpReq.Body)
+		if err == nil {
+			ip := net.ParseIP(httpReq.RemoteAddr)
+
+			query := httpReq.URL.Query()
+			parameters := []string{}
+			for key := range query {
+				parameters = append(parameters, key)
+				parameters = append(parameters, query.Get(key))
+			}
+
+			var req Request
+			if req, err = tr.NewRequest(ip, endpoint, parameters, body, nil); err == nil {
+				var resBody any
+				if rawResBody, resBody, err = handle(req); err == nil {
+					if resBody != nil {
+						rawResBody, err = json.Marshal(resBody)
+					}
+				}
+			}
+		}
+
+		if err != nil {
+			httpRes.Write([]byte(err.Error()))
+			httpRes.WriteHeader(http.StatusInternalServerError)
+		} else {
+			httpRes.Write(rawResBody)
+		}
+	})
 }
 
 // Starts receiver.
@@ -122,67 +209,6 @@ func (tr *HttpTransportReceiver) Start() error {
 // Stops receiver.
 func (tr *HttpTransportReceiver) Stop() error {
 	return tr.server.Shutdown(context.Background())
-}
-
-// Receives request.
-func (tr *HttpTransportReceiver) Receive(point TransportPoint, handle func() error) {
-	tr.ReceiveRawBody(point, func([]byte) error {
-		return handle()
-	})
-}
-
-// Receives request with body.
-func (tr *HttpTransportReceiver) ReceiveBody(point TransportPoint, construct func() any, handle func(any) error) {
-	tr.ReceiveRawBody(point, func(data []byte) error {
-		body := construct()
-		err := json.Unmarshal(data, body)
-		if err == nil {
-			err = handle(body)
-		}
-		return err
-	})
-}
-
-// Receives request with raw body.
-func (tr *HttpTransportReceiver) ReceiveRawBody(point TransportPoint, handle func([]byte) error) {
-	tr.ReceiveRawBodyAndSend(point, func(data []byte) (any, error) {
-		return nil, handle(data)
-	})
-}
-
-// Receives request with body and sends response.
-func (tr *HttpTransportReceiver) ReceiveBodyAndSend(point TransportPoint, construct func() any, handle func(any) (any, error)) {
-	tr.ReceiveRawBodyAndSend(point, func(data []byte) (any, error) {
-		var res any
-
-		body := construct()
-		err := json.Unmarshal(data, body)
-		if err == nil {
-			res, err = handle(body)
-		}
-		return res, err
-	})
-}
-
-// Receives request with raw body and sends response.
-func (tr *HttpTransportReceiver) ReceiveRawBodyAndSend(point TransportPoint, handle func([]byte) (any, error)) {
-	tr.mux.HandleFunc(point[0], func(wrt http.ResponseWriter, req *http.Request) {
-		defer req.Body.Close()
-
-		var res any
-		body, err := io.ReadAll(req.Body)
-		if err == nil {
-			if res, err = handle(body); res != nil {
-				if body, err = json.Marshal(res); err == nil {
-					wrt.Write(body)
-				}
-			}
-		}
-
-		if err != nil {
-			wrt.WriteHeader(http.StatusInternalServerError)
-		}
-	})
 }
 
 // Returns protocol.

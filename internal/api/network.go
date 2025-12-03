@@ -55,9 +55,15 @@ func (network *Network) GetHosts() ([]RemoteHost, error) {
 
 // Gets information about host by IP.
 func (network *Network) GetHost(ip net.IP) (*RemoteHost, error) {
-	res, err := network.client.SendAndReceive(ip, API.ServerHost(), &RemoteHost{})
+	req, err := network.client.NewRequest(ip, Endpoints.ServerHost, nil, nil, nil)
 	if err == nil {
-		return res.(*RemoteHost), nil
+		var res transport.Response
+		if res, err = network.client.Send(req); err == nil {
+			host := &RemoteHost{}
+			if _, err = res.Body(host); err == nil {
+				return host, nil
+			}
+		}
 	}
 	return nil, err
 }

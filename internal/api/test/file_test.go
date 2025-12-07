@@ -34,9 +34,9 @@ func TestWriteSuccess(t *testing.T) {
 	}()
 	time.Sleep(2 * time.Second)
 
-	host, err := network.GetHost(local.IP)
+	host, _ := network.GetHost(local.IP)
 	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
-	err = file.Write(network.Transport(), []byte("TEST"))
+	err := file.Write(network.Transport(), []byte("TEST"))
 	if err != nil {
 		t.Fatal("error should be nil")
 	}

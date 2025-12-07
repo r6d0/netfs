@@ -28,7 +28,7 @@ func (lg *Logger) Info(message string, args ...any) {
 }
 
 func (lg *Logger) Error(message string, args ...any) {
-	if lg.level == Error {
+	if lg.level <= Error {
 		lg.logger.Printf("[ERROR] "+message, args...)
 	}
 }

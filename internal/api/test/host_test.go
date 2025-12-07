@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func TestOpenFileSuccess(t *testing.T) {
+func TestFileInfoSuccess(t *testing.T) {
 	config := api.NetworkConfig{Port: 5, Protocol: transport.HTTP, Timeout: 5 * time.Second}
 	network, _ := api.NewNetwork(config)
 	local := network.LocalHost()
@@ -34,7 +34,7 @@ func TestOpenFileSuccess(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	file, err := host.OpenFile(network.Transport(), "./test_file.txt")
+	file, err := host.FileInfo(network.Transport(), "./test_file.txt")
 	if err != nil {
 		t.Fatal("error should be nil")
 	}
@@ -52,7 +52,7 @@ func TestOpenFileSuccess(t *testing.T) {
 	}
 }
 
-func TestOpenFileResponseError(t *testing.T) {
+func TestFileInfoResponseError(t *testing.T) {
 	config := api.NetworkConfig{Port: 6, Protocol: transport.HTTP, Timeout: 5 * time.Second}
 	network, _ := api.NewNetwork(config)
 	local := network.LocalHost()
@@ -69,7 +69,7 @@ func TestOpenFileResponseError(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	_, err := host.OpenFile(network.Transport(), "./test_file.txt")
+	_, err := host.FileInfo(network.Transport(), "./test_file.txt")
 	if err == nil {
 		t.Fatal("error should be not nil")
 	}

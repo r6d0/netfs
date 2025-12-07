@@ -49,6 +49,7 @@ const (
 
 // The context for the task.
 type TaskExecuteContext struct {
+	Log       *logger.Logger
 	Volumes   volume.VolumeManager
 	Transport transport.TransportSender
 	Config    TaskExecuteConfig
@@ -131,7 +132,7 @@ func (exec *taskExecutor) Start() error {
 	go func(cancel chan bool) {
 		available := maxAvailableTasks
 		complete := make(chan Task)
-		ctx := TaskExecuteContext{Config: exec.config, Transport: exec.transport, Volumes: exec.volumes}
+		ctx := TaskExecuteContext{Log: exec.log, Config: exec.config, Transport: exec.transport, Volumes: exec.volumes}
 		condition := database.Eq(Status, []byte{byte(Waiting)})
 
 		cancelled := false

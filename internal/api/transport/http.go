@@ -15,6 +15,7 @@ import (
 )
 
 const portSeparator = ":"
+const paramsSeparator = "?"
 const httpProtocol = "http://"
 
 type httpRequest struct {
@@ -102,20 +103,20 @@ func (tr *HttpTransportSender) Send(req Request) (Response, error) {
 	if err == nil {
 		endpoint = strings.Join([]string{endpoint, strconv.Itoa(int(tr.Port()))}, portSeparator)
 		endpoint, err = url.JoinPath(endpoint, req.Endpoint())
+		if params := req.Params(); err == nil && len(params) > 0 {
+			urlParams := url.Values{}
+			for index := range params {
+				if index%2 == 0 {
+					urlParams.Add(params[index], params[index+1])
+				}
+			}
+			endpoint = strings.Join([]string{endpoint, urlParams.Encode()}, paramsSeparator)
+		}
 	}
 
 	if err == nil {
 		var httpReq *http.Request
 		if httpReq, err = http.NewRequest(http.MethodPost, endpoint, reader); err == nil {
-			if params := req.Params(); len(params) > 0 {
-				query := httpReq.URL.Query()
-				for index := range params {
-					if index%2 == 0 {
-						query.Add(params[index], params[index+1])
-					}
-				}
-			}
-
 			var httpRes *http.Response
 			if httpRes, err = tr.client.Do(httpReq); err == nil {
 				defer httpRes.Body.Close()

@@ -35,7 +35,7 @@ func TestWriteSuccess(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, err := network.GetHost(local.IP)
-	file, _ := host.OpenFile(network.Transport(), "./test_file.txt")
+	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
 	err = file.Write(network.Transport(), []byte("TEST"))
 	if err != nil {
 		t.Fatal("error should be nil")
@@ -66,7 +66,7 @@ func TestWriteResponseError(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	file, _ := host.OpenFile(network.Transport(), "./test_file.txt")
+	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
 	err := file.Write(network.Transport(), []byte("TEST"))
 	if err == nil {
 		t.Fatal("error should be not nil")
@@ -98,7 +98,7 @@ func TestCreateSuccess(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	file, _ := host.OpenFile(network.Transport(), "./test_file.txt")
+	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
 	err := file.Create(network.Transport())
 	if err != nil {
 		t.Fatal("error should be nil")
@@ -129,7 +129,7 @@ func TestCreateResponseError(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	file, _ := host.OpenFile(network.Transport(), "./test_file.txt")
+	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
 	err := file.Create(network.Transport())
 	if err == nil {
 		t.Fatal("error should be not nil")
@@ -161,7 +161,7 @@ func TestCopyToSuccess(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	file, _ := host.OpenFile(network.Transport(), "./test_file.txt")
+	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
 	err := file.CopyTo(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file_1.txt"}})
 	if err != nil {
 		t.Fatal("error should be nil")
@@ -192,7 +192,7 @@ func TestCopyToResponseError(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
-	file, _ := host.OpenFile(network.Transport(), "./test_file.txt")
+	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
 	err := file.CopyTo(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file_1.txt"}})
 	if err == nil {
 		t.Fatal("error should be not nil")

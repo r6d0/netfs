@@ -38,6 +38,7 @@ func (srv *Server) Start() error {
 	srv.receiver.Receive(api.Endpoints.ServerHost, srv.ServerHostHandle)
 	srv.receiver.Receive(api.Endpoints.FileInfo.Name, srv.FileInfoHandle)
 	srv.receiver.Receive(api.Endpoints.FileCreate, srv.FileCreateHandle)
+	srv.receiver.Receive(api.Endpoints.FileWrite.Name, srv.FileWriteHandle)
 	srv.receiver.Receive(api.Endpoints.FileCopyStart, srv.FileCopyStartHandle)
 
 	dbErr := srv.db.Start()
@@ -124,6 +125,17 @@ func (srv *Server) FileCreateHandle(req transport.Request) ([]byte, any, error) 
 		if err == nil {
 			err = vl.Create(info)
 		}
+	}
+	return nil, nil, err
+}
+
+// Writes data to file.
+func (srv *Server) FileWriteHandle(req transport.Request) ([]byte, any, error) {
+	path := req.Param(api.Endpoints.FileWrite.Path)
+	volume, err := srv.volumes.Volume(path)
+	if err == nil {
+		srv.log.Info("SIZE: %d", len(req.RawBody()))
+		err = volume.Write(path, req.RawBody())
 	}
 	return nil, nil, err
 }

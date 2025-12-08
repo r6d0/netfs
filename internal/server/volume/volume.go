@@ -176,13 +176,20 @@ func (vl *volume) Write(path string, data []byte) error {
 		records, err := table.Get(database.Eq(FilePath, []byte(path)))
 		if err == nil {
 			if len(records) == 1 {
-				fileOsPath := vl.ResolvePath(string(records[0].GetField(FilePath)))
+				record := records[0]
+				fileOsPath := vl.ResolvePath(string(record.GetField(FilePath)))
 
 				var file *os.File
 				if file, err = os.OpenFile(fileOsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
 					defer file.Close() // TODO. Add file to cache
 
 					_, err = file.Write(data)
+					if err == nil {
+						size := record.GetUint64(FileSize) + uint64(len(data))
+						record.SetUint64(FileSize, size)
+
+						err = table.Set(records...)
+					}
 				}
 			} else {
 				err = ErrFileNotFound

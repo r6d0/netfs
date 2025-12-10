@@ -155,16 +155,28 @@ func TestCopyToSuccess(t *testing.T) {
 
 			w.Write(data)
 		})
-		mux.HandleFunc(api.Endpoints.FileCopyStart, func(w http.ResponseWriter, r *http.Request) {})
+		mux.HandleFunc(api.Endpoints.FileCopyStart, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(
+				api.RemoteTask{Id: 1, Status: api.Waiting, Host: local},
+			)
+
+			w.Write(data)
+		})
 		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
 	}()
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.GetHost(local.IP)
 	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
-	err := file.CopyTo(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file_1.txt"}})
+	task, err := file.CopyTo(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file_1.txt"}})
 	if err != nil {
-		t.Fatal("error should be nil")
+		t.Fatalf("error should be nil, but error is [%s]", err)
+	}
+	if task == nil {
+		t.Fatal("task should be not nil")
+	}
+	if task.Status != api.Waiting {
+		t.Fatalf("status should be [%d]", api.Waiting)
 	}
 }
 
@@ -193,7 +205,7 @@ func TestCopyToResponseError(t *testing.T) {
 
 	host, _ := network.GetHost(local.IP)
 	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
-	err := file.CopyTo(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file_1.txt"}})
+	_, err := file.CopyTo(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file_1.txt"}})
 	if err == nil {
 		t.Fatal("error should be not nil")
 	}

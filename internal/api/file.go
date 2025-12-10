@@ -20,6 +20,7 @@ func (fileType FileType) String() string {
 	return "d"
 }
 
+// Information about file.
 type FileInfo struct {
 	FileName string
 	FilePath string
@@ -27,7 +28,7 @@ type FileInfo struct {
 	FileSize int64
 }
 
-// Information about file.
+// File on a remote resource.
 type RemoteFile struct {
 	Host RemoteHost
 	Info FileInfo
@@ -53,10 +54,16 @@ func (file RemoteFile) Create(client transport.TransportSender) error {
 }
 
 // Copies the current file to the target file.
-func (file RemoteFile) CopyTo(client transport.TransportSender, target RemoteFile) error {
+func (file RemoteFile) CopyTo(client transport.TransportSender, target RemoteFile) (*RemoteTask, error) {
 	req, err := client.NewRequest(file.Host.IP, Endpoints.FileCopyStart, nil, nil, []RemoteFile{file, target})
 	if err == nil {
-		_, err = client.Send(req)
+		var res transport.Response
+		if res, err = client.Send(req); err == nil {
+			task := &RemoteTask{}
+			if _, err = res.Body(task); err == nil {
+				return task, nil
+			}
+		}
 	}
-	return err
+	return nil, err
 }

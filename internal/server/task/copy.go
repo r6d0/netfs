@@ -14,7 +14,7 @@ type TaskCopyConfig struct {
 // The task of copying the file.
 type CopyTask struct {
 	Id     uint64
-	Status TaskStatus
+	Status api.TaskStatus
 	Type   TaskType
 	Offset int64
 	Source api.RemoteFile
@@ -22,17 +22,25 @@ type CopyTask struct {
 	Error  string
 }
 
+func (task *CopyTask) TaskId() int {
+	return int(task.Id) // TODO. remove casting.
+}
+
+func (task *CopyTask) TaskStatus() api.TaskStatus {
+	return task.Status
+}
+
 func (task *CopyTask) TaskType() TaskType {
 	return task.Type
 }
 
 func (task *CopyTask) Init(TaskExecuteContext) error {
-	task.Status = Waiting
+	task.Status = api.Waiting
 	return nil
 }
 
 func (task *CopyTask) BeforeExecute(TaskExecuteContext) error {
-	task.Status = Running
+	task.Status = api.Running
 	return nil
 }
 
@@ -51,19 +59,19 @@ func (task *CopyTask) Execute(ctx TaskExecuteContext) error {
 			var buffer []byte
 			if buffer, err = vl.Read(path, task.Offset, size); err == nil {
 				if err = target.Write(ctx.Transport, buffer); err == nil {
-					task.Status = Waiting
+					task.Status = api.Waiting
 					task.Offset += int64(len(buffer))
 				}
 			}
 
 			if len(buffer) < int(size) {
-				task.Status = Completed
+				task.Status = api.Completed
 			}
 		}
 	}
 
 	if err != nil {
-		task.Status = Failed
+		task.Status = api.Failed
 		task.Error = err.Error()
 	}
 	return err
@@ -78,8 +86,7 @@ func NewCopyTask(source api.RemoteFile, target api.RemoteFile) (*CopyTask, error
 	return &CopyTask{Type: Copy, Source: source, Target: target}, nil
 }
 
-// Converts a database record to a task.
-func CopyTaskFromRecord(record database.Record) (*CopyTask, error) {
+func copyTaskFromRecord(record database.Record) (*CopyTask, error) {
 	task := &CopyTask{}
 	data := record.GetField(Payload)
 	if err := json.Unmarshal(data, task); err != nil {
@@ -88,8 +95,7 @@ func CopyTaskFromRecord(record database.Record) (*CopyTask, error) {
 	return task, nil
 }
 
-// Converts a task to a database record.
-func CopyTaskToRecord(table database.Table, task *CopyTask) (database.Record, error) {
+func copyTaskToRecord(table database.Table, task *CopyTask) (database.Record, error) {
 	if task.Id == 0 {
 		task.Id = table.NextId()
 	}

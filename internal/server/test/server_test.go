@@ -184,10 +184,17 @@ func TestFileCopyStartHandleSuccess(t *testing.T) {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
+	var task *api.RemoteTask
 	copyFile := api.RemoteFile{Host: host, Info: api.FileInfo{FileName: "TestFileCopyStartHandleSuccess", FilePath: "root:/dir2/TestFileCopyStartHandleSuccess", FileType: api.FILE}}
-	err = file.CopyTo(network.Transport(), copyFile)
+	task, err = file.CopyTo(network.Transport(), copyFile)
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+	if task == nil {
+		t.Fatal("task should be not nil")
+	}
+	if task.Status != api.Waiting {
+		t.Fatalf("status should be [%d]", api.Waiting)
 	}
 	time.Sleep(5 * time.Second)
 
@@ -204,6 +211,68 @@ func TestFileCopyStartHandleSuccess(t *testing.T) {
 
 	if !bytes.Equal(data, generated) {
 		t.Fatalf("data should be equal")
+	}
+
+	srv.Stop()
+}
+
+func TestFileCopyStatusHandleSuccess(t *testing.T) {
+	osPath, _ := filepath.Abs("./dir1")
+	osCopyPath, _ := filepath.Abs("./dir2")
+	defer os.RemoveAll(osPath)
+	defer os.RemoveAll(osCopyPath)
+
+	config := server.ServerConfig{
+		Network:  api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: time.Second * 5},
+		Log:      logger.LoggerConfig{Level: logger.Info},
+		Database: database.DatabaseConfig{Path: "./"},
+		Task:     task.TaskExecuteConfig{MaxAvailableTasks: 100, Copy: task.TaskCopyConfig{BufferSize: 1024}, TasksWaitingSecond: 1},
+	}
+
+	srv, err := server.NewServer(config)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	go func() {
+		srv.Start()
+	}()
+	time.Sleep(2 * time.Second)
+
+	network, _ := api.NewNetwork(config.Network)
+	host := network.LocalHost()
+	file := api.RemoteFile{Host: host, Info: api.FileInfo{FileName: "TestFileCopyStatusHandleSuccess", FilePath: "root:/dir1/TestFileCopyStatusHandleSuccess", FileType: api.FILE}}
+	err = file.Create(network.Transport())
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	generated := generate(100)
+	err = file.Write(network.Transport(), generated)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	var task *api.RemoteTask
+	copyFile := api.RemoteFile{Host: host, Info: api.FileInfo{FileName: "TestFileCopyStatusHandleSuccess", FilePath: "root:/dir2/TestFileCopyStatusHandleSuccess", FileType: api.FILE}}
+	task, err = file.CopyTo(network.Transport(), copyFile)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+	if task == nil {
+		t.Fatal("task should be not nil")
+	}
+	if task.Status != api.Waiting {
+		t.Fatalf("status should be [%d]", api.Waiting)
+	}
+	time.Sleep(5 * time.Second)
+
+	err = task.Refresh(network.Transport())
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+	if task.Status != api.Completed {
+		t.Fatalf("status should be [%d]", api.Completed)
 	}
 
 	srv.Stop()

@@ -2,6 +2,7 @@ package task
 
 import (
 	"errors"
+	"netfs/internal/api"
 	"netfs/internal/api/transport"
 	"netfs/internal/logger"
 	"netfs/internal/server/database"
@@ -31,19 +32,10 @@ type TaskExecuteConfig struct {
 // Task fields.
 type TaskRecordField uint8
 
-// Status of the task.
-type TaskStatus uint8
-
 // Type of the task.
 type TaskType uint8
 
 const (
-	Waiting TaskStatus = iota
-	Stopped
-	Failed
-	Running
-	Completed
-
 	Copy TaskType = iota
 )
 
@@ -57,6 +49,8 @@ type TaskExecuteContext struct {
 
 // The task abstraction.
 type Task interface {
+	TaskId() int
+	TaskStatus() api.TaskStatus
 	TaskType() TaskType
 	Init(TaskExecuteContext) error
 	BeforeExecute(TaskExecuteContext) error
@@ -64,34 +58,19 @@ type Task interface {
 	AfterExecute(TaskExecuteContext) error
 }
 
-// Converts a database record to a task.
-func TaskFromRecord(record database.Record) (Task, error) {
-	if TaskType(record.GetUint8(Type)) == Copy {
-		return CopyTaskFromRecord(record)
-	}
-	return nil, ErrUnknownTaskType
-}
-
-// Converts a task to a database record.
-func TaskToRecord(table database.Table, task Task) (database.Record, error) {
-	if task.TaskType() == Copy {
-		return CopyTaskToRecord(table, task.(*CopyTask))
-	}
-	return nil, ErrUnknownTaskType
-}
-
-// The tasks executor.
-type TaskExecutor interface {
-	Submit(Task) (uint64, error)
+// The tasks manager.
+type TaskManager interface {
+	Get(int) (Task, error)
+	Set(Task) (int, error)
 	Start() error
 	Stop() error
 }
 
-func NewTaskExecutor(config TaskExecuteConfig, db database.Database, volumes volume.VolumeManager, transport transport.TransportSender, log *logger.Logger) (TaskExecutor, error) {
-	return &taskExecutor{config: config, log: log, db: db, volumes: volumes, transport: transport, cancel: make(chan bool)}, nil
+func NewTaskManager(config TaskExecuteConfig, db database.Database, volumes volume.VolumeManager, transport transport.TransportSender, log *logger.Logger) (TaskManager, error) {
+	return &taskManager{config: config, log: log, db: db, volumes: volumes, transport: transport, cancel: make(chan bool)}, nil
 }
 
-type taskExecutor struct {
+type taskManager struct {
 	config    TaskExecuteConfig
 	log       *logger.Logger
 	db        database.Database
@@ -100,7 +79,16 @@ type taskExecutor struct {
 	cancel    chan bool
 }
 
-func (exec *taskExecutor) Submit(task Task) (uint64, error) {
+func (exec *taskManager) Get(taskId int) (Task, error) {
+	table := exec.db.Table(TaskTable)
+	records, err := table.Get(database.Id(uint64(taskId))) // TODO. remove casting
+	if err == nil && len(records) > 0 {
+		return taskFromRecord(records[0])
+	}
+	return nil, err
+}
+
+func (exec *taskManager) Set(task Task) (int, error) {
 	var taskId uint64
 	var record database.Record
 
@@ -108,7 +96,7 @@ func (exec *taskExecutor) Submit(task Task) (uint64, error) {
 	err := task.Init(TaskExecuteContext{Config: exec.config, Transport: exec.transport, Volumes: exec.volumes})
 	if err == nil {
 		table := exec.db.Table(TaskTable)
-		if record, err = TaskToRecord(table, task); err == nil {
+		if record, err = taskToRecord(table, task); err == nil {
 			err = table.Set(record)
 		}
 	}
@@ -119,10 +107,10 @@ func (exec *taskExecutor) Submit(task Task) (uint64, error) {
 		taskId = record.GetRecordId()
 		log.Info("task: [%v] is waiting", task)
 	}
-	return taskId, err
+	return int(taskId), err // TODO. remove casting.
 }
 
-func (exec *taskExecutor) Start() error {
+func (exec *taskManager) Start() error {
 	exec.log.Info("task executor is staring")
 
 	maxAvailableTasks := exec.config.MaxAvailableTasks
@@ -133,7 +121,7 @@ func (exec *taskExecutor) Start() error {
 		available := maxAvailableTasks
 		complete := make(chan Task)
 		ctx := TaskExecuteContext{Log: exec.log, Config: exec.config, Transport: exec.transport, Volumes: exec.volumes}
-		condition := database.Eq(Status, []byte{byte(Waiting)})
+		condition := database.Eq(Status, []byte{byte(api.Waiting)})
 
 		cancelled := false
 		for {
@@ -146,7 +134,7 @@ func (exec *taskExecutor) Start() error {
 				exec.log.Info("task: [%s] is completed", task)
 
 				err := task.AfterExecute(ctx)
-				if record, convErr := TaskToRecord(table, task); convErr == nil {
+				if record, convErr := taskToRecord(table, task); convErr == nil {
 					err = errors.Join(err, table.Set(record))
 				}
 
@@ -167,13 +155,13 @@ func (exec *taskExecutor) Start() error {
 
 						for _, record := range records {
 							var task Task
-							task, err = TaskFromRecord(record)
+							task, err = taskFromRecord(record)
 							if err == nil {
 								err = task.BeforeExecute(ctx)
 							}
 
 							if err == nil {
-								record, err = TaskToRecord(table, task)
+								record, err = taskToRecord(table, task)
 							}
 
 							if err == nil {
@@ -204,8 +192,22 @@ func (exec *taskExecutor) Start() error {
 	return nil
 }
 
-func (exec *taskExecutor) Stop() error {
+func (exec *taskManager) Stop() error {
 	exec.cancel <- true
 	exec.log.Info("task executor is stopped")
 	return nil
+}
+
+func taskFromRecord(record database.Record) (Task, error) {
+	if TaskType(record.GetUint8(Type)) == Copy {
+		return copyTaskFromRecord(record)
+	}
+	return nil, ErrUnknownTaskType
+}
+
+func taskToRecord(table database.Table, task Task) (database.Record, error) {
+	if task.TaskType() == Copy {
+		return copyTaskToRecord(table, task.(*CopyTask))
+	}
+	return nil, ErrUnknownTaskType
 }

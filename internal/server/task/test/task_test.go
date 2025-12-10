@@ -1,24 +1,54 @@
 package task
 
-// func TestSubmitSuccess(t *testing.T) {
-// 	db := database.NewDatabase(database.DatabaseConfig{})
-// 	volumes, _ := volume.NewVolumeManager(db)
-// 	client := &transport.CallbackTransport{}
-// 	log := logger.NewLogger(logger.LoggerConfig{})
-// 	exec, _ := task.NewTaskExecutor(task.TaskExecuteConfig{}, db, volumes, client, log)
+import (
+	"netfs/internal/api"
+	"netfs/internal/logger"
+	"netfs/internal/server/database"
+	"netfs/internal/server/task"
+	"netfs/internal/server/volume"
+	"testing"
+)
 
-// 	copyTask, _ := task.NewCopyTask(api.RemoteFile{}, api.RemoteFile{})
-// 	taskId, err := exec.Submit(copyTask)
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
+func TestSetSuccess(t *testing.T) {
+	db := database.NewDatabase(database.DatabaseConfig{})
+	volumes, _ := volume.NewVolumeManager(db)
+	log := logger.NewLogger(logger.LoggerConfig{})
+	exec, _ := task.NewTaskManager(task.TaskExecuteConfig{}, db, volumes, nil, log)
 
-// 	table := db.Table(task.TaskTable)
-// 	records, _ := table.Get(database.Id(taskId))
-// 	if len(records) != 1 {
-// 		t.Fatal("database should contains only one record")
-// 	}
-// }
+	copyTask, _ := task.NewCopyTask(api.RemoteFile{}, api.RemoteFile{})
+	taskId, err := exec.Set(copyTask)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	table := db.Table(task.TaskTable)
+	records, _ := table.Get(database.Id(uint64(taskId)))
+	if len(records) != 1 {
+		t.Fatal("database should contains only one record")
+	}
+}
+
+func TestGetSuccess(t *testing.T) {
+	db := database.NewDatabase(database.DatabaseConfig{})
+	volumes, _ := volume.NewVolumeManager(db)
+	log := logger.NewLogger(logger.LoggerConfig{})
+	exec, _ := task.NewTaskManager(task.TaskExecuteConfig{}, db, volumes, nil, log)
+
+	copyTask, _ := task.NewCopyTask(api.RemoteFile{}, api.RemoteFile{})
+	taskId, err := exec.Set(copyTask)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	var task task.Task
+	task, err = exec.Get(taskId)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+	if task == nil {
+		t.Fatal("Task should be not nil")
+	}
+}
 
 // func TestStartSuccess(t *testing.T) {
 // 	generated := generate(100) // 100 bytes

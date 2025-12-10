@@ -10,6 +10,7 @@ import (
 	"netfs/internal/server/volume"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 )
 
@@ -27,7 +28,7 @@ type Server struct {
 	log      *logger.Logger
 	network  *api.Network
 	receiver transport.TransportReceiver
-	tasks    task.TaskExecutor
+	tasks    task.TaskManager
 	volumes  volume.VolumeManager
 	stop     chan os.Signal
 }
@@ -40,6 +41,7 @@ func (srv *Server) Start() error {
 	srv.receiver.Receive(api.Endpoints.FileCreate, srv.FileCreateHandle)
 	srv.receiver.Receive(api.Endpoints.FileWrite.Name, srv.FileWriteHandle)
 	srv.receiver.Receive(api.Endpoints.FileCopyStart, srv.FileCopyStartHandle)
+	srv.receiver.Receive(api.Endpoints.FileCopyStatus.Name, srv.FileCopyStatusHandle)
 
 	dbErr := srv.db.Start()
 	recErr := srv.receiver.Start()
@@ -80,8 +82,8 @@ func NewServer(config ServerConfig) (*Server, error) {
 		if receiver, err = transport.NewReceiver(config.Network.Protocol, config.Network.Port); err == nil {
 			var volumes volume.VolumeManager
 			if volumes, err = volume.NewVolumeManager(db); err == nil {
-				var tasks task.TaskExecutor
-				if tasks, err = task.NewTaskExecutor(config.Task, db, volumes, network.Transport(), log); err == nil {
+				var tasks task.TaskManager
+				if tasks, err = task.NewTaskManager(config.Task, db, volumes, network.Transport(), log); err == nil {
 					stop := make(chan os.Signal, 1)
 					signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
@@ -134,7 +136,6 @@ func (srv *Server) FileWriteHandle(req transport.Request) ([]byte, any, error) {
 	path := req.Param(api.Endpoints.FileWrite.Path)
 	volume, err := srv.volumes.Volume(path)
 	if err == nil {
-		srv.log.Info("SIZE: %d", len(req.RawBody()))
 		err = volume.Write(path, req.RawBody())
 	}
 	return nil, nil, err
@@ -148,10 +149,23 @@ func (srv *Server) FileCopyStartHandle(req transport.Request) ([]byte, any, erro
 		var copyTask *task.CopyTask
 		copyTask, err = task.NewCopyTask((*files)[0], (*files)[1])
 		if err == nil {
-			var taskId uint64
-			if taskId, err = srv.tasks.Submit(copyTask); err == nil {
-				return nil, taskId, err
+			var taskId int
+			if taskId, err = srv.tasks.Set(copyTask); err == nil {
+				return nil, api.RemoteTask{Id: taskId, Status: copyTask.Status, Host: srv.network.LocalHost()}, err
 			}
+		}
+	}
+	return nil, nil, err
+}
+
+// Returns status of the task.
+func (srv *Server) FileCopyStatusHandle(req transport.Request) ([]byte, any, error) {
+	param := req.Param(api.Endpoints.FileCopyStatus.Id)
+	id, err := strconv.Atoi(param)
+	if err == nil {
+		var task task.Task
+		if task, err = srv.tasks.Get(id); err == nil {
+			return nil, api.RemoteTask{Id: id, Status: task.TaskStatus(), Host: srv.network.LocalHost()}, nil
 		}
 	}
 	return nil, nil, err

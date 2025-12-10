@@ -179,7 +179,5 @@ func (srv *Server) FileCopyStopHandle(req transport.Request) ([]byte, any, error
 	if err == nil {
 		err = srv.tasks.StopTask(id)
 	}
-
-	srv.log.Info("ID: %d", id)
 	return nil, nil, err
 }

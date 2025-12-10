@@ -42,6 +42,7 @@ func (srv *Server) Start() error {
 	srv.receiver.Receive(api.Endpoints.FileWrite.Name, srv.FileWriteHandle)
 	srv.receiver.Receive(api.Endpoints.FileCopyStart, srv.FileCopyStartHandle)
 	srv.receiver.Receive(api.Endpoints.FileCopyStatus.Name, srv.FileCopyStatusHandle)
+	srv.receiver.Receive(api.Endpoints.FileCopyStop.Name, srv.FileCopyStopHandle)
 
 	dbErr := srv.db.Start()
 	recErr := srv.receiver.Start()
@@ -150,7 +151,7 @@ func (srv *Server) FileCopyStartHandle(req transport.Request) ([]byte, any, erro
 		copyTask, err = task.NewCopyTask((*files)[0], (*files)[1])
 		if err == nil {
 			var taskId int
-			if taskId, err = srv.tasks.Set(copyTask); err == nil {
+			if taskId, err = srv.tasks.SetTask(copyTask); err == nil {
 				return nil, api.RemoteTask{Id: taskId, Status: copyTask.Status, Host: srv.network.LocalHost()}, err
 			}
 		}
@@ -164,9 +165,21 @@ func (srv *Server) FileCopyStatusHandle(req transport.Request) ([]byte, any, err
 	id, err := strconv.Atoi(param)
 	if err == nil {
 		var task task.Task
-		if task, err = srv.tasks.Get(id); err == nil {
+		if task, err = srv.tasks.GetTask(id); err == nil {
 			return nil, api.RemoteTask{Id: id, Status: task.TaskStatus(), Host: srv.network.LocalHost()}, nil
 		}
 	}
+	return nil, nil, err
+}
+
+// Stops the task.
+func (srv *Server) FileCopyStopHandle(req transport.Request) ([]byte, any, error) {
+	param := req.Param(api.Endpoints.FileCopyStop.Id)
+	id, err := strconv.Atoi(param)
+	if err == nil {
+		err = srv.tasks.StopTask(id)
+	}
+
+	srv.log.Info("ID: %d", id)
 	return nil, nil, err
 }

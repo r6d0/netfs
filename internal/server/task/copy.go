@@ -11,15 +11,19 @@ type TaskCopyConfig struct {
 	BufferSize int64
 }
 
-// The task of copying the file.
-type CopyTask struct {
-	Id     uint64
-	Status api.TaskStatus
-	Type   TaskType
+type CopyTaskPayload struct {
 	Offset int64
 	Source api.RemoteFile
 	Target api.RemoteFile
 	Error  string
+}
+
+// The task of copying the file.
+type CopyTask struct {
+	Id      uint64
+	Status  api.TaskStatus
+	Type    TaskType
+	Payload CopyTaskPayload
 }
 
 func (task *CopyTask) TaskId() int {
@@ -46,8 +50,8 @@ func (task *CopyTask) BeforeExecute(TaskExecuteContext) error {
 
 func (task *CopyTask) Execute(ctx TaskExecuteContext) error {
 	config := ctx.Config.Copy
-	source := task.Source
-	target := task.Target
+	source := task.Payload.Source
+	target := task.Payload.Target
 
 	err := target.Create(ctx.Transport)
 	if err == nil {
@@ -57,10 +61,10 @@ func (task *CopyTask) Execute(ctx TaskExecuteContext) error {
 		var vl volume.Volume
 		if vl, err = ctx.Volumes.Volume(path); err == nil {
 			var buffer []byte
-			if buffer, err = vl.Read(path, task.Offset, size); err == nil {
+			if buffer, err = vl.Read(path, task.Payload.Offset, size); err == nil {
 				if err = target.Write(ctx.Transport, buffer); err == nil {
 					task.Status = api.Waiting
-					task.Offset += int64(len(buffer))
+					task.Payload.Offset += int64(len(buffer))
 				}
 			}
 
@@ -72,7 +76,7 @@ func (task *CopyTask) Execute(ctx TaskExecuteContext) error {
 
 	if err != nil {
 		task.Status = api.Failed
-		task.Error = err.Error()
+		task.Payload.Error = err.Error()
 	}
 	return err
 }
@@ -83,16 +87,19 @@ func (*CopyTask) AfterExecute(TaskExecuteContext) error {
 
 // Creates a new instance of the task.
 func NewCopyTask(source api.RemoteFile, target api.RemoteFile) (*CopyTask, error) {
-	return &CopyTask{Type: Copy, Source: source, Target: target}, nil
+	return &CopyTask{Type: Copy, Payload: CopyTaskPayload{Source: source, Target: target}}, nil
 }
 
 func copyTaskFromRecord(record database.Record) (*CopyTask, error) {
-	task := &CopyTask{}
-	data := record.GetField(Payload)
-	if err := json.Unmarshal(data, task); err != nil {
+	payload := &CopyTaskPayload{}
+	err := json.Unmarshal(record.GetField(Payload), payload)
+	if err != nil {
 		return nil, err
 	}
-	return task, nil
+
+	id := record.GetRecordId()
+	status := api.TaskStatus(record.GetUint8(Status))
+	return &CopyTask{Id: id, Status: status, Type: Copy, Payload: *payload}, nil
 }
 
 func copyTaskToRecord(table database.Table, task *CopyTask) (database.Record, error) {
@@ -101,7 +108,7 @@ func copyTaskToRecord(table database.Table, task *CopyTask) (database.Record, er
 	}
 
 	var record database.Record
-	data, err := json.Marshal(task)
+	data, err := json.Marshal(task.Payload)
 	if err == nil {
 		record = database.NewRecord(3)
 		record.SetRecordId(task.Id)

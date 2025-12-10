@@ -31,24 +31,6 @@ const size = 4294967294
 // 	BinSearch(file, uint32(834148), size)
 // }
 
-func TestCreateFile(t *testing.T) {
-	file, err := os.OpenFile("./file", os.O_CREATE, 0644)
-	if err != nil {
-		panic(err)
-	}
-
-	data := make([]byte, 4)
-	for i := range size {
-		binary.BigEndian.PutUint32(data, uint32(i))
-
-		_, err := file.Write(data)
-		if err != nil {
-			panic(err)
-		}
-	}
-	file.Close()
-}
-
 func BenchmarkSeqSearch(b *testing.B) {
 	file, err := os.Open("./file")
 	if err != nil {

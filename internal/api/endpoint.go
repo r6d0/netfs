@@ -15,6 +15,11 @@ type FileCopyStatusEndpoint struct {
 	Id   string
 }
 
+type FileCopyStopEndpoint struct {
+	Name string
+	Id   string
+}
+
 var Endpoints = struct {
 	ServerHost     string
 	ServerStop     string
@@ -23,6 +28,7 @@ var Endpoints = struct {
 	FileWrite      FileWriteEndpoint
 	FileCopyStart  string
 	FileCopyStatus FileCopyStatusEndpoint
+	FileCopyStop   FileCopyStopEndpoint
 }{
 	ServerHost:     "/netfs/api/server/host",
 	ServerStop:     "/netfs/api/server/stop",
@@ -31,4 +37,5 @@ var Endpoints = struct {
 	FileWrite:      FileWriteEndpoint{Name: "/netfs/api/file/write", Path: "path"},
 	FileCopyStart:  "/netfs/api/file/copy/start",
 	FileCopyStatus: FileCopyStatusEndpoint{Name: "/netfs/api/file/copy/status", Id: "id"},
+	FileCopyStop:   FileCopyStopEndpoint{Name: "/netfs/api/file/copy/stop", Id: "id"},
 }

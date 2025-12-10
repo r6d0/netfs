@@ -37,3 +37,14 @@ func (tsk *RemoteTask) Refresh(client transport.TransportSender) error {
 	}
 	return err
 }
+
+// Stops the task.
+func (tsk *RemoteTask) Stop(client transport.TransportSender) error {
+	params := []string{Endpoints.FileCopyStop.Id, strconv.Itoa(tsk.Id)}
+	req, err := client.NewRequest(tsk.Host.IP, Endpoints.FileCopyStop.Name, params, nil, nil)
+
+	if err == nil {
+		_, err = client.Send(req)
+	}
+	return err
+}

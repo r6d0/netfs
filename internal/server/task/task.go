@@ -60,8 +60,9 @@ type Task interface {
 
 // The tasks manager.
 type TaskManager interface {
-	Get(int) (Task, error)
-	Set(Task) (int, error)
+	GetTask(int) (Task, error)
+	SetTask(Task) (int, error)
+	StopTask(int) error
 	Start() error
 	Stop() error
 }
@@ -79,7 +80,7 @@ type taskManager struct {
 	cancel    chan bool
 }
 
-func (exec *taskManager) Get(taskId int) (Task, error) {
+func (exec *taskManager) GetTask(taskId int) (Task, error) {
 	table := exec.db.Table(TaskTable)
 	records, err := table.Get(database.Id(uint64(taskId))) // TODO. remove casting
 	if err == nil && len(records) > 0 {
@@ -88,7 +89,7 @@ func (exec *taskManager) Get(taskId int) (Task, error) {
 	return nil, err
 }
 
-func (exec *taskManager) Set(task Task) (int, error) {
+func (exec *taskManager) SetTask(task Task) (int, error) {
 	var taskId uint64
 	var record database.Record
 
@@ -108,6 +109,16 @@ func (exec *taskManager) Set(task Task) (int, error) {
 		log.Info("task: [%v] is waiting", task)
 	}
 	return int(taskId), err // TODO. remove casting.
+}
+
+func (exec *taskManager) StopTask(taskId int) error {
+	table := exec.db.Table(TaskTable)
+	records, err := table.Get(database.Id(uint64(taskId))) // TODO. remove casting
+	if err == nil && len(records) > 0 {
+		records[0].SetUint8(Status, uint8(api.Stopped))
+		err = table.Set(records...)
+	}
+	return err
 }
 
 func (exec *taskManager) Start() error {

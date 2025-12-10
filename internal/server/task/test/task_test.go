@@ -9,14 +9,14 @@ import (
 	"testing"
 )
 
-func TestSetSuccess(t *testing.T) {
+func TestSetTaskSuccess(t *testing.T) {
 	db := database.NewDatabase(database.DatabaseConfig{})
 	volumes, _ := volume.NewVolumeManager(db)
 	log := logger.NewLogger(logger.LoggerConfig{})
 	exec, _ := task.NewTaskManager(task.TaskExecuteConfig{}, db, volumes, nil, log)
 
 	copyTask, _ := task.NewCopyTask(api.RemoteFile{}, api.RemoteFile{})
-	taskId, err := exec.Set(copyTask)
+	taskId, err := exec.SetTask(copyTask)
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -28,25 +28,48 @@ func TestSetSuccess(t *testing.T) {
 	}
 }
 
-func TestGetSuccess(t *testing.T) {
+func TestGetTaskSuccess(t *testing.T) {
 	db := database.NewDatabase(database.DatabaseConfig{})
 	volumes, _ := volume.NewVolumeManager(db)
 	log := logger.NewLogger(logger.LoggerConfig{})
 	exec, _ := task.NewTaskManager(task.TaskExecuteConfig{}, db, volumes, nil, log)
 
 	copyTask, _ := task.NewCopyTask(api.RemoteFile{}, api.RemoteFile{})
-	taskId, err := exec.Set(copyTask)
+	taskId, err := exec.SetTask(copyTask)
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
 	var task task.Task
-	task, err = exec.Get(taskId)
+	task, err = exec.GetTask(taskId)
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 	if task == nil {
 		t.Fatal("Task should be not nil")
+	}
+}
+
+func TestStopTaskSuccess(t *testing.T) {
+	db := database.NewDatabase(database.DatabaseConfig{})
+	volumes, _ := volume.NewVolumeManager(db)
+	log := logger.NewLogger(logger.LoggerConfig{})
+	exec, _ := task.NewTaskManager(task.TaskExecuteConfig{}, db, volumes, nil, log)
+
+	copyTask, _ := task.NewCopyTask(api.RemoteFile{}, api.RemoteFile{})
+	taskId, err := exec.SetTask(copyTask)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	err = exec.StopTask(taskId)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	task, _ := exec.GetTask(taskId)
+	if task.TaskStatus() != api.Stopped {
+		t.Fatalf("Status should be equals [%d], but status is [%d]", api.Stopped, task.TaskStatus())
 	}
 }
 

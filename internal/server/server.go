@@ -40,9 +40,10 @@ func (srv *Server) Start() error {
 	srv.receiver.Receive(api.Endpoints.FileInfo.Name, srv.FileInfoHandle)
 	srv.receiver.Receive(api.Endpoints.FileCreate, srv.FileCreateHandle)
 	srv.receiver.Receive(api.Endpoints.FileWrite.Name, srv.FileWriteHandle)
+	srv.receiver.Receive(api.Endpoints.FileRemove.Name, srv.FileRemoveHandle)
 	srv.receiver.Receive(api.Endpoints.FileCopyStart, srv.FileCopyStartHandle)
 	srv.receiver.Receive(api.Endpoints.FileCopyStatus.Name, srv.FileCopyStatusHandle)
-	srv.receiver.Receive(api.Endpoints.FileCopyStop.Name, srv.FileCopyStopHandle)
+	srv.receiver.Receive(api.Endpoints.FileCopyStop.Name, srv.FileCopyCancelHandle)
 
 	dbErr := srv.db.Start()
 	recErr := srv.receiver.Start()
@@ -142,6 +143,16 @@ func (srv *Server) FileWriteHandle(req transport.Request) ([]byte, any, error) {
 	return nil, nil, err
 }
 
+// Removes file or directory.
+func (srv *Server) FileRemoveHandle(req transport.Request) ([]byte, any, error) {
+	path := req.Param(api.Endpoints.FileRemove.Path)
+	volume, err := srv.volumes.Volume(path)
+	if err == nil {
+		err = volume.Remove(path)
+	}
+	return nil, nil, err
+}
+
 // Starts a new task to copy the file or directory.
 func (srv *Server) FileCopyStartHandle(req transport.Request) ([]byte, any, error) { // TODO. Check len(files) == 2
 	files := &[]api.RemoteFile{}
@@ -173,11 +184,11 @@ func (srv *Server) FileCopyStatusHandle(req transport.Request) ([]byte, any, err
 }
 
 // Stops the task.
-func (srv *Server) FileCopyStopHandle(req transport.Request) ([]byte, any, error) {
+func (srv *Server) FileCopyCancelHandle(req transport.Request) ([]byte, any, error) {
 	param := req.Param(api.Endpoints.FileCopyStop.Id)
 	id, err := strconv.Atoi(param)
 	if err == nil {
-		err = srv.tasks.StopTask(id)
+		err = srv.tasks.CancelTask(id)
 	}
 	return nil, nil, err
 }

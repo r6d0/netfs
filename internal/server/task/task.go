@@ -56,13 +56,14 @@ type Task interface {
 	BeforeExecute(TaskExecuteContext) error
 	Execute(TaskExecuteContext) error
 	AfterExecute(TaskExecuteContext) error
+	Cancel(TaskExecuteContext) error
 }
 
 // The tasks manager.
 type TaskManager interface {
 	GetTask(int) (Task, error)
 	SetTask(Task) (int, error)
-	StopTask(int) error
+	CancelTask(int) error
 	Start() error
 	Stop() error
 }
@@ -111,12 +112,18 @@ func (exec *taskManager) SetTask(task Task) (int, error) {
 	return int(taskId), err // TODO. remove casting.
 }
 
-func (exec *taskManager) StopTask(taskId int) error {
-	table := exec.db.Table(TaskTable)
-	records, err := table.Get(database.Id(uint64(taskId))) // TODO. remove casting
-	if err == nil && len(records) > 0 {
-		records[0].SetUint8(Status, uint8(api.Stopped))
-		err = table.Set(records...)
+func (exec *taskManager) CancelTask(taskId int) error {
+	task, err := exec.GetTask(taskId)
+	if err == nil {
+		ctx := TaskExecuteContext{Log: exec.log, Config: exec.config, Transport: exec.transport, Volumes: exec.volumes}
+		if err = task.Cancel(ctx); err == nil { // TODO. need lock the task before cancel.
+			table := exec.db.Table(TaskTable)
+
+			var record database.Record
+			if record, err = taskToRecord(table, task); err == nil {
+				table.Set(record)
+			}
+		}
 	}
 	return err
 }

@@ -173,18 +173,20 @@ func (tb *inMemoryTable) Get(options ...Option) ([]Record, error) {
 	count := int16(0)
 	result := []Record{}
 	for _, record := range tb.records {
-		match := true
-		for _, cond := range ctx.Conditions {
-			match = match && cond.match(record)
-		}
+		if record != nil {
+			match := true
+			for _, cond := range ctx.Conditions {
+				match = match && cond.match(record)
+			}
 
-		if match {
-			result = append(result, record)
-			count++
-		}
+			if match {
+				result = append(result, record)
+				count++
+			}
 
-		if count == ctx.Limit {
-			break
+			if count == ctx.Limit {
+				break
+			}
 		}
 	}
 	return result, nil

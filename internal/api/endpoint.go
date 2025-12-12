@@ -10,12 +10,17 @@ type FileWriteEndpoint struct {
 	Path string
 }
 
+type FileRemoveEndpoint struct {
+	Name string
+	Path string
+}
+
 type FileCopyStatusEndpoint struct {
 	Name string
 	Id   string
 }
 
-type FileCopyStopEndpoint struct {
+type FileCopyCancelEndpoint struct {
 	Name string
 	Id   string
 }
@@ -26,16 +31,18 @@ var Endpoints = struct {
 	FileInfo       FileInfoEndpoint
 	FileCreate     string
 	FileWrite      FileWriteEndpoint
+	FileRemove     FileRemoveEndpoint
 	FileCopyStart  string
 	FileCopyStatus FileCopyStatusEndpoint
-	FileCopyStop   FileCopyStopEndpoint
+	FileCopyStop   FileCopyCancelEndpoint
 }{
 	ServerHost:     "/netfs/api/server/host",
 	ServerStop:     "/netfs/api/server/stop",
 	FileInfo:       FileInfoEndpoint{Name: "/netfs/api/file/info", Path: "path"},
 	FileCreate:     "/netfs/api/file/create",
 	FileWrite:      FileWriteEndpoint{Name: "/netfs/api/file/write", Path: "path"},
+	FileRemove:     FileRemoveEndpoint{Name: "/netfs/api/file/remove", Path: "path"},
 	FileCopyStart:  "/netfs/api/file/copy/start",
 	FileCopyStatus: FileCopyStatusEndpoint{Name: "/netfs/api/file/copy/status", Id: "id"},
-	FileCopyStop:   FileCopyStopEndpoint{Name: "/netfs/api/file/copy/stop", Id: "id"},
+	FileCopyStop:   FileCopyCancelEndpoint{Name: "/netfs/api/file/copy/cancel", Id: "id"},
 }

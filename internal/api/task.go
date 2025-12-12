@@ -10,7 +10,7 @@ type TaskStatus uint8
 
 const (
 	Waiting TaskStatus = iota
-	Stopped
+	Cancelled
 	Failed
 	Running
 	Completed
@@ -38,8 +38,8 @@ func (tsk *RemoteTask) Refresh(client transport.TransportSender) error {
 	return err
 }
 
-// Stops the task.
-func (tsk *RemoteTask) Stop(client transport.TransportSender) error {
+// Cancels the current task.
+func (tsk *RemoteTask) Cancel(client transport.TransportSender) error {
 	params := []string{Endpoints.FileCopyStop.Id, strconv.Itoa(tsk.Id)}
 	req, err := client.NewRequest(tsk.Host.IP, Endpoints.FileCopyStop.Name, params, nil, nil)
 

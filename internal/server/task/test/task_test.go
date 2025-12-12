@@ -50,7 +50,7 @@ func TestGetTaskSuccess(t *testing.T) {
 	}
 }
 
-func TestStopTaskSuccess(t *testing.T) {
+func TestCancelTaskSuccess(t *testing.T) {
 	db := database.NewDatabase(database.DatabaseConfig{})
 	volumes, _ := volume.NewVolumeManager(db)
 	log := logger.NewLogger(logger.LoggerConfig{})
@@ -62,14 +62,14 @@ func TestStopTaskSuccess(t *testing.T) {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	err = exec.StopTask(taskId)
+	err = exec.CancelTask(taskId)
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
 	task, _ := exec.GetTask(taskId)
-	if task.TaskStatus() != api.Stopped {
-		t.Fatalf("Status should be equals [%d], but status is [%d]", api.Stopped, task.TaskStatus())
+	if task.TaskStatus() != api.Cancelled {
+		t.Fatalf("Status should be equals [%d], but status is [%d]", api.Cancelled, task.TaskStatus())
 	}
 }
 

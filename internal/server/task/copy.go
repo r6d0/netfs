@@ -85,6 +85,11 @@ func (*CopyTask) AfterExecute(TaskExecuteContext) error {
 	return nil
 }
 
+func (task *CopyTask) Cancel(ctx TaskExecuteContext) error {
+	task.Status = api.Cancelled
+	return task.Payload.Target.Remove(ctx.Transport)
+}
+
 // Creates a new instance of the task.
 func NewCopyTask(source api.RemoteFile, target api.RemoteFile) (*CopyTask, error) {
 	return &CopyTask{Type: Copy, Payload: CopyTaskPayload{Source: source, Target: target}}, nil

@@ -295,6 +295,40 @@ func TestCreateFileSuccess(t *testing.T) {
 	}
 }
 
+func TestRemoveFileSuccess(t *testing.T) {
+	defer os.RemoveAll("./testDir1")
+
+	vlOsPath, _ := filepath.Abs("./")
+
+	db := database.NewDatabase(database.DatabaseConfig{})
+	vlTable := db.Table(volume.VolumeTable)
+	vlRecord := database.NewRecord(3)
+	vlRecord.SetRecordId(vlTable.NextId())
+	vlRecord.SetField(volume.VolumeName, []byte("root"))
+	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
+	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
+	vlTable.Set(vlRecord)
+
+	manager, _ := volume.NewVolumeManager(db)
+	vl, _ := manager.Volume("root")
+	vl.Create(&api.FileInfo{FileName: "TestCreateFileSuccess", FilePath: "root:/testDir1/testDir2/testDir3/TestCreateFileSuccess", FileType: api.FILE})
+
+	err := vl.Remove("root:/testDir1/testDir2/testDir3/TestCreateFileSuccess")
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	_, err = os.Stat("./testDir1/testDir2/testDir3/TestCreateFileSuccess")
+	if err == nil {
+		t.Fatal("error should be not nil, but err is nil")
+	}
+
+	_, err = vl.Info("root:/testDir1/testDir2/testDir3/TestCreateFileSuccess")
+	if err == nil {
+		t.Fatal("error should be not nil, but err is nil")
+	}
+}
+
 func generate(size int) []byte {
 	result := make([]byte, size)
 	for i := range size {

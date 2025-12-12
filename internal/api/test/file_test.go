@@ -210,3 +210,66 @@ func TestCopyToResponseError(t *testing.T) {
 		t.Fatal("error should be not nil")
 	}
 }
+
+func TestFileRemoveSuccess(t *testing.T) {
+	config := api.NetworkConfig{Port: 9, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	network, _ := api.NewNetwork(config)
+	local := network.LocalHost()
+
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(local)
+
+			w.Write(data)
+		})
+		mux.HandleFunc(api.Endpoints.FileInfo.Name, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(
+				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
+			)
+
+			w.Write(data)
+		})
+		mux.HandleFunc(api.Endpoints.FileRemove.Name, func(w http.ResponseWriter, r *http.Request) {})
+		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
+	}()
+	time.Sleep(2 * time.Second)
+
+	host, _ := network.GetHost(local.IP)
+	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
+	err := file.Remove(network.Transport())
+	if err != nil {
+		t.Fatal("error should be nil")
+	}
+}
+
+func TestFileRemoveResponseError(t *testing.T) {
+	config := api.NetworkConfig{Port: 10, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+	network, _ := api.NewNetwork(config)
+	local := network.LocalHost()
+
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(local)
+
+			w.Write(data)
+		})
+		mux.HandleFunc(api.Endpoints.FileInfo.Name, func(w http.ResponseWriter, r *http.Request) {
+			data, _ := json.Marshal(
+				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
+			)
+
+			w.Write(data)
+		})
+		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
+	}()
+	time.Sleep(2 * time.Second)
+
+	host, _ := network.GetHost(local.IP)
+	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
+	err := file.Remove(network.Transport())
+	if err == nil {
+		t.Fatal("error should be not nil")
+	}
+}

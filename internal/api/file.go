@@ -35,9 +35,9 @@ type RemoteFile struct {
 }
 
 // Writes data to remote file.
-func (file RemoteFile) Write(client transport.TransportSender, data []byte) error {
-	parameters := []string{Endpoints.FileWrite.Path, file.Info.FilePath}
-	req, err := client.NewRequest(file.Host.IP, Endpoints.FileWrite.Name, parameters, data, nil)
+func (file *RemoteFile) Write(client transport.TransportSender, data []byte) error {
+	params := []string{Endpoints.FileWrite.Path, file.Info.FilePath}
+	req, err := client.NewRequest(file.Host.IP, Endpoints.FileWrite.Name, params, data, nil)
 	if err == nil {
 		_, err = client.Send(req)
 	}
@@ -45,7 +45,7 @@ func (file RemoteFile) Write(client transport.TransportSender, data []byte) erro
 }
 
 // Creates file or directory on remote host.
-func (file RemoteFile) Create(client transport.TransportSender) error {
+func (file *RemoteFile) Create(client transport.TransportSender) error {
 	req, err := client.NewRequest(file.Host.IP, Endpoints.FileCreate, nil, nil, file.Info)
 	if err == nil {
 		_, err = client.Send(req)
@@ -54,8 +54,8 @@ func (file RemoteFile) Create(client transport.TransportSender) error {
 }
 
 // Copies the current file to the target file.
-func (file RemoteFile) CopyTo(client transport.TransportSender, target RemoteFile) (*RemoteTask, error) {
-	req, err := client.NewRequest(file.Host.IP, Endpoints.FileCopyStart, nil, nil, []RemoteFile{file, target})
+func (file *RemoteFile) CopyTo(client transport.TransportSender, target RemoteFile) (*RemoteTask, error) {
+	req, err := client.NewRequest(file.Host.IP, Endpoints.FileCopyStart, nil, nil, []RemoteFile{*file, target})
 	if err == nil {
 		var res transport.Response
 		if res, err = client.Send(req); err == nil {
@@ -66,4 +66,14 @@ func (file RemoteFile) CopyTo(client transport.TransportSender, target RemoteFil
 		}
 	}
 	return nil, err
+}
+
+// Removes the file from the remote host.
+func (file *RemoteFile) Remove(client transport.TransportSender) error {
+	params := []string{Endpoints.FileRemove.Path, file.Info.FilePath}
+	req, err := client.NewRequest(file.Host.IP, Endpoints.FileRemove.Name, params, nil, nil)
+	if err == nil {
+		_, err = client.Send(req)
+	}
+	return err
 }

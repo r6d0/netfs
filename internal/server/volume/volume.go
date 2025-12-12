@@ -63,6 +63,7 @@ type Volume interface {
 	Create(*api.FileInfo) error
 	Read(string, int64, int64) ([]byte, error)
 	Write(string, []byte) error
+	Remove(string) error
 	ResolvePath(string) string
 }
 
@@ -198,6 +199,23 @@ func (vl *volume) Write(path string, data []byte) error {
 		return err
 	}
 	return ErrWriteIsNotPermitted
+}
+
+func (vl *volume) Remove(path string) error {
+	if vl.perm&Write != 0 {
+		table := vl.db.Table(VolumeFileTable)
+		records, err := table.Get(database.Eq(FilePath, []byte(path)))
+		if err == nil {
+			if len(records) == 1 {
+				if err = table.Del(database.Id(records[0].GetRecordId())); err == nil {
+					fileOsPath := vl.ResolvePath(string(records[0].GetField(FilePath)))
+					err = os.RemoveAll(fileOsPath)
+				}
+			}
+		}
+		return err
+	}
+	return ErrReadIsNotPermitted
 }
 
 func (vl *volume) ResolvePath(original string) string {

@@ -44,7 +44,7 @@ func TestRefreshSuccess(t *testing.T) {
 	}
 }
 
-func TestStopSuccess(t *testing.T) {
+func TestCancelSuccess(t *testing.T) {
 	config := api.NetworkConfig{Port: 8, Protocol: transport.HTTP, Timeout: 5 * time.Second}
 	network, _ := api.NewNetwork(config)
 	local := network.LocalHost()
@@ -63,7 +63,7 @@ func TestStopSuccess(t *testing.T) {
 
 	host, _ := network.GetHost(local.IP)
 	task := api.RemoteTask{Id: 1, Status: api.Waiting, Host: *host}
-	err := task.Stop(network.Transport())
+	err := task.Cancel(network.Transport())
 	if err != nil {
 		t.Fatalf("error should be nil, but error is [%s]", err)
 	}

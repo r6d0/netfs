@@ -147,6 +147,45 @@ func TestFileCreateHandleSuccess(t *testing.T) {
 	srv.Stop()
 }
 
+func TestFileRemoveHandleSuccess(t *testing.T) {
+	osPath, _ := filepath.Abs("./dir1")
+	defer os.RemoveAll(osPath)
+
+	config := server.ServerConfig{
+		Network:  api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: time.Second * 5},
+		Log:      logger.LoggerConfig{Level: logger.Info},
+		Database: database.DatabaseConfig{Path: "./"},
+		Task:     task.TaskExecuteConfig{MaxAvailableTasks: 100, Copy: task.TaskCopyConfig{BufferSize: 1024}, TasksWaitingSecond: 100},
+	}
+
+	srv, err := server.NewServer(config)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	go func() {
+		srv.Start()
+	}()
+	time.Sleep(2 * time.Second)
+
+	network, _ := api.NewNetwork(config.Network)
+	host := network.LocalHost()
+	file := api.RemoteFile{Host: host, Info: api.FileInfo{FileName: "TestFileCreateHandleSuccess", FilePath: "root:/dir1/TestFileCreateHandleSuccess", FileType: api.FILE}}
+	file.Create(network.Transport())
+
+	err = file.Remove(network.Transport())
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	_, err = os.Stat(filepath.Join(osPath, "TestFileCreateHandleSuccess"))
+	if err == nil {
+		t.Fatal("error should be not nil, but err is nil")
+	}
+
+	srv.Stop()
+}
+
 func TestFileCopyStartHandleSuccess(t *testing.T) {
 	osPath, _ := filepath.Abs("./dir1")
 	osCopyPath, _ := filepath.Abs("./dir2")
@@ -278,7 +317,7 @@ func TestFileCopyStatusHandleSuccess(t *testing.T) {
 	srv.Stop()
 }
 
-func TestFileCopyStopHandleSuccess(t *testing.T) {
+func TestFileCopyCancelHandleSuccess(t *testing.T) {
 	osPath, _ := filepath.Abs("./dir1")
 	osCopyPath, _ := filepath.Abs("./dir2")
 	defer os.RemoveAll(osPath)
@@ -322,14 +361,19 @@ func TestFileCopyStopHandleSuccess(t *testing.T) {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	err = task.Stop(network.Transport())
+	err = task.Cancel(network.Transport())
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
 	task.Refresh(network.Transport())
-	if task.Status != api.Stopped {
-		t.Fatalf("status should be [%d], but status is [%d]", api.Stopped, task.Status)
+	if task.Status != api.Cancelled {
+		t.Fatalf("status should be [%d], but status is [%d]", api.Cancelled, task.Status)
+	}
+
+	_, err = host.FileInfo(network.Transport(), copyFile.Info.FilePath)
+	if err == nil {
+		t.Fatal("error should be not nil, but err is nil")
 	}
 
 	srv.Stop()

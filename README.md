@@ -14,7 +14,7 @@ netfs (Network File System) allows you to manage the file system of computers on
                 ----------------------------------
 
 LOCAL NETWORK - It's a network of computers, for example, your wifi network.
-COMPUTER      - It's any PC any computer with the Windows, Linux or MacOS operating system.
+COMPUTER      - It's any PC with the Windows, Linux or MacOS operating system.
 HOST          - It's netfs server.
 CLIENT        - It's any interface for interacting with netfs.
 ```

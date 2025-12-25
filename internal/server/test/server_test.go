@@ -366,7 +366,7 @@ func TestFileCopyCancelHandleSuccess(t *testing.T) {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	task, err = host.Task(network.Transport(), task.Id)
+	task, _ = host.Task(network.Transport(), task.Id)
 	if task.Status != api.Cancelled {
 		t.Fatalf("status should be [%d], but status is [%d]", api.Cancelled, task.Status)
 	}

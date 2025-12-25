@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
-	"netfs/internal/api/transport"
+	"netfs/api/transport"
 	"os"
 	"strings"
 	"time"

@@ -2,8 +2,8 @@ package server
 
 import (
 	"errors"
-	"netfs/internal/api"
-	"netfs/internal/api/transport"
+	"netfs/api"
+	"netfs/api/transport"
 	"netfs/internal/logger"
 	"netfs/internal/server/database"
 	"netfs/internal/server/task"
@@ -108,7 +108,7 @@ func (srv *Server) ServerHostHandle(req transport.Request) ([]byte, any, error) 
 }
 
 // Returns information about file.
-func (srv *Server) FileInfoHandle(req transport.Request) ([]byte, any, error) {
+func (srv *Server) FileInfoHandle(req transport.Request) ([]byte, any, error) { // TODO. add validation
 	path := req.Param(api.Endpoints.FileInfo.Path)
 	volume, err := srv.volumes.Volume(path)
 	if err == nil {

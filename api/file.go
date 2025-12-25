@@ -1,8 +1,6 @@
 package api
 
-import (
-	"netfs/internal/api/transport"
-)
+import "netfs/api/transport"
 
 // Type of file.
 type FileType byte

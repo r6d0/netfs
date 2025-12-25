@@ -3,8 +3,8 @@ package api_test
 import (
 	"encoding/json"
 	"net/http"
-	"netfs/internal/api"
-	"netfs/internal/api/transport"
+	"netfs/api"
+	"netfs/api/transport"
 	"strconv"
 	"testing"
 	"time"

@@ -1,7 +1,7 @@
 package task
 
 import (
-	"netfs/internal/api"
+	"netfs/api"
 	"netfs/internal/logger"
 	"netfs/internal/server/database"
 	"netfs/internal/server/task"

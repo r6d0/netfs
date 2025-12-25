@@ -1,7 +1,7 @@
 package api
 
 import (
-	"netfs/internal/api/transport"
+	"netfs/api/transport"
 	"strconv"
 )
 

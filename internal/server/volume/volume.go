@@ -3,7 +3,7 @@ package volume
 import (
 	"errors"
 	"io"
-	"netfs/internal/api"
+	"netfs/api"
 	"netfs/internal/server/database"
 	"os"
 	"path/filepath"

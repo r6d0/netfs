@@ -3,7 +3,7 @@ package volume_test
 import (
 	"bytes"
 	"io"
-	"netfs/internal/api"
+	"netfs/api"
 	"netfs/internal/server/database"
 	"netfs/internal/server/volume"
 	"os"

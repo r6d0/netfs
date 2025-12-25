@@ -3,6 +3,7 @@ package main
 const NAME_INDEX = 1
 
 func main() {
+
 	// var err error
 	// var config *netfs.Config
 

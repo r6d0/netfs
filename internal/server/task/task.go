@@ -2,8 +2,8 @@ package task
 
 import (
 	"errors"
-	"netfs/internal/api"
-	"netfs/internal/api/transport"
+	"netfs/api"
+	"netfs/api/transport"
 	"netfs/internal/logger"
 	"netfs/internal/server/database"
 	"netfs/internal/server/volume"

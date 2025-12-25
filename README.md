@@ -3,14 +3,14 @@ netfs (Network File System) allows you to manage the file system of computers on
 
 ## Architecture
 
-### Simple architecture of netfs.
+### Architecture of netfs.
 ```
 --------------------------------------------------
-|                  NETWORK                       |
+|                   NETWORK                      |
 -------------------------------------------------|
 |               | COMPUTER | COMPUTER | COMPUTER |
 | CLIENT |  ->  |----------|----------|----------|
-|               |   HOST   |   HOST   |  HOST    |
+|               |   HOST  <->   HOST <->   HOST  |
 --------------------------------------------------
 
 NETWORK  - It's a network of computers, for example, your wifi network.
@@ -19,7 +19,7 @@ HOST     - It's netfs server.
 CLIENT   - It's any interface for interacting with netfs.
 ```
 
-### Simple architecture of netfs host.
+### Architecture of netfs host.
 ```
 ---------------------------
 |         HOST            |

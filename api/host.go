@@ -2,7 +2,7 @@ package api
 
 import (
 	"net"
-	"netfs/internal/api/transport"
+	"netfs/api/transport"
 	"strconv"
 )
 

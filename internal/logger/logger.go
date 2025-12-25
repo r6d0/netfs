@@ -33,6 +33,7 @@ func (lg *Logger) Error(message string, args ...any) {
 	}
 }
 
+// TODO. its print incorrect file name
 func NewLogger(config LoggerConfig) *Logger {
 	lg := Logger{level: config.Level, logger: log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile)}
 	return &lg

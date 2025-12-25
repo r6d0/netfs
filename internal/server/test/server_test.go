@@ -3,8 +3,8 @@ package server_test
 import (
 	"bytes"
 	"fmt"
-	"netfs/internal/api"
-	"netfs/internal/api/transport"
+	"netfs/api"
+	"netfs/api/transport"
 	"netfs/internal/logger"
 	"netfs/internal/server"
 	"netfs/internal/server/database"

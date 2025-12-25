@@ -5,18 +5,18 @@ netfs (Network File System) allows you to manage the file system of computers on
 
 ### Simple architecture of netfs.
 ```
-                ----------------------------------
-                |          LOCAL NETWORK         |
-                |--------------------------------|
-| CLIENT |  ->  | COMPUTER | COMPUTER | COMPUTER |
-                |----------|----------|----------|
-                |   HOST   |   HOST   |  HOST    |
-                ----------------------------------
+--------------------------------------------------
+|                  NETWORK                       |
+-------------------------------------------------|
+|               | COMPUTER | COMPUTER | COMPUTER |
+| CLIENT |  ->  |----------|----------|----------|
+|               |   HOST   |   HOST   |  HOST    |
+--------------------------------------------------
 
-LOCAL NETWORK - It's a network of computers, for example, your wifi network.
-COMPUTER      - It's any PC with the Windows, Linux or MacOS operating system.
-HOST          - It's netfs server.
-CLIENT        - It's any interface for interacting with netfs.
+NETWORK  - It's a network of computers, for example, your wifi network.
+COMPUTER - It's any PC with the Windows, Linux or MacOS operating system.
+HOST     - It's netfs server.
+CLIENT   - It's any interface for interacting with netfs.
 ```
 
 ### Simple architecture of netfs host.

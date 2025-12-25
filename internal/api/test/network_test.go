@@ -14,7 +14,7 @@ import (
 
 func TestGetIPs(t *testing.T) {
 	network, _ := api.NewNetwork(api.NetworkConfig{Port: 1, Protocol: transport.HTTP, Timeout: 1 * time.Second})
-	ips, err := network.GetIPs()
+	ips, err := network.IPs()
 	if err != nil {
 		t.Fatal("error should be nil")
 	}
@@ -63,7 +63,7 @@ func TestGetHostSuccess(t *testing.T) {
 	}()
 	time.Sleep(2 * time.Second)
 
-	host, err := network.GetHost(local.IP)
+	host, err := network.Host(local.IP)
 	if err != nil {
 		t.Fatal("error should be nil")
 	}
@@ -82,7 +82,7 @@ func TestGetHostUnavailable(t *testing.T) {
 	network, _ := api.NewNetwork(config)
 	local := network.LocalHost()
 
-	_, err := network.GetHost(local.IP)
+	_, err := network.Host(local.IP)
 	if err == nil {
 		t.Fatalf("error should be not nil")
 	}
@@ -99,7 +99,7 @@ func TestGetHostResponseError(t *testing.T) {
 	}()
 	time.Sleep(2 * time.Second)
 
-	_, err := network.GetHost(local.IP)
+	_, err := network.Host(local.IP)
 	if !errors.Is(err, transport.ErrUnexpectedAnswer) {
 		t.Fatalf("error should be [transport.UnexpectedAnswer], but error is [%s]", err)
 	}
@@ -122,7 +122,7 @@ func TestGetHostsSuccess(t *testing.T) {
 	}()
 	time.Sleep(2 * time.Second)
 
-	hosts, err := network.GetHosts()
+	hosts, err := network.Hosts()
 	if err != nil {
 		t.Fatal("error should be nil")
 	}

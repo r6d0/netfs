@@ -34,8 +34,8 @@ func TestWriteSuccess(t *testing.T) {
 	}()
 	time.Sleep(2 * time.Second)
 
-	host, _ := network.GetHost(local.IP)
-	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
+	host, _ := network.Host(local.IP)
+	file, _ := host.File(network.Transport(), "./test_file.txt")
 	err := file.Write(network.Transport(), []byte("TEST"))
 	if err != nil {
 		t.Fatal("error should be nil")
@@ -65,8 +65,8 @@ func TestWriteResponseError(t *testing.T) {
 	}()
 	time.Sleep(2 * time.Second)
 
-	host, _ := network.GetHost(local.IP)
-	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
+	host, _ := network.Host(local.IP)
+	file, _ := host.File(network.Transport(), "./test_file.txt")
 	err := file.Write(network.Transport(), []byte("TEST"))
 	if err == nil {
 		t.Fatal("error should be not nil")
@@ -97,8 +97,8 @@ func TestCreateSuccess(t *testing.T) {
 	}()
 	time.Sleep(2 * time.Second)
 
-	host, _ := network.GetHost(local.IP)
-	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
+	host, _ := network.Host(local.IP)
+	file, _ := host.File(network.Transport(), "./test_file.txt")
 	err := file.Create(network.Transport())
 	if err != nil {
 		t.Fatal("error should be nil")
@@ -128,8 +128,8 @@ func TestCreateResponseError(t *testing.T) {
 	}()
 	time.Sleep(2 * time.Second)
 
-	host, _ := network.GetHost(local.IP)
-	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
+	host, _ := network.Host(local.IP)
+	file, _ := host.File(network.Transport(), "./test_file.txt")
 	err := file.Create(network.Transport())
 	if err == nil {
 		t.Fatal("error should be not nil")
@@ -166,8 +166,8 @@ func TestCopyToSuccess(t *testing.T) {
 	}()
 	time.Sleep(2 * time.Second)
 
-	host, _ := network.GetHost(local.IP)
-	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
+	host, _ := network.Host(local.IP)
+	file, _ := host.File(network.Transport(), "./test_file.txt")
 	task, err := file.CopyTo(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file_1.txt"}})
 	if err != nil {
 		t.Fatalf("error should be nil, but error is [%s]", err)
@@ -203,8 +203,8 @@ func TestCopyToResponseError(t *testing.T) {
 	}()
 	time.Sleep(2 * time.Second)
 
-	host, _ := network.GetHost(local.IP)
-	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
+	host, _ := network.Host(local.IP)
+	file, _ := host.File(network.Transport(), "./test_file.txt")
 	_, err := file.CopyTo(network.Transport(), api.RemoteFile{Info: api.FileInfo{FilePath: "./test_file_1.txt"}})
 	if err == nil {
 		t.Fatal("error should be not nil")
@@ -235,8 +235,8 @@ func TestFileRemoveSuccess(t *testing.T) {
 	}()
 	time.Sleep(2 * time.Second)
 
-	host, _ := network.GetHost(local.IP)
-	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
+	host, _ := network.Host(local.IP)
+	file, _ := host.File(network.Transport(), "./test_file.txt")
 	err := file.Remove(network.Transport())
 	if err != nil {
 		t.Fatal("error should be nil")
@@ -266,8 +266,8 @@ func TestFileRemoveResponseError(t *testing.T) {
 	}()
 	time.Sleep(2 * time.Second)
 
-	host, _ := network.GetHost(local.IP)
-	file, _ := host.FileInfo(network.Transport(), "./test_file.txt")
+	host, _ := network.Host(local.IP)
+	file, _ := host.File(network.Transport(), "./test_file.txt")
 	err := file.Remove(network.Transport())
 	if err == nil {
 		t.Fatal("error should be not nil")

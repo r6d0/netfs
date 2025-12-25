@@ -34,7 +34,7 @@ func TestServerHostHandleSuccess(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	network, _ := api.NewNetwork(config.Network)
-	host, err := network.GetHost(network.LocalIP())
+	host, err := network.Host(network.LocalIP())
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -102,7 +102,7 @@ func TestFileInfoHandleSuccess(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	network, _ := api.NewNetwork(config.Network)
-	info, err := network.LocalHost().FileInfo(network.Transport(), "root:/myfile.txt")
+	info, err := network.LocalHost().File(network.Transport(), "root:/myfile.txt")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -306,7 +306,7 @@ func TestFileCopyStatusHandleSuccess(t *testing.T) {
 	}
 	time.Sleep(5 * time.Second)
 
-	err = task.Refresh(network.Transport())
+	task, err = host.Task(network.Transport(), task.Id)
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -366,12 +366,12 @@ func TestFileCopyCancelHandleSuccess(t *testing.T) {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	task.Refresh(network.Transport())
+	task, err = host.Task(network.Transport(), task.Id)
 	if task.Status != api.Cancelled {
 		t.Fatalf("status should be [%d], but status is [%d]", api.Cancelled, task.Status)
 	}
 
-	_, err = host.FileInfo(network.Transport(), copyFile.Info.FilePath)
+	_, err = host.File(network.Transport(), copyFile.Info.FilePath)
 	if err == nil {
 		t.Fatal("error should be not nil, but err is nil")
 	}

@@ -31,15 +31,15 @@ type Network struct {
 }
 
 // Get information about available hosts.
-func (network *Network) GetHosts() ([]RemoteHost, error) {
+func (network *Network) Hosts() ([]RemoteHost, error) {
 	var hosts []RemoteHost
 
-	ips, err := network.GetIPs()
+	ips, err := network.IPs()
 	if err == nil {
 		callback := make(chan *RemoteHost)
 		for _, ip := range ips {
 			go func(ip net.IP, callback chan *RemoteHost) {
-				host, _ := network.GetHost(ip)
+				host, _ := network.Host(ip)
 				callback <- host
 			}(ip, callback)
 		}
@@ -54,7 +54,7 @@ func (network *Network) GetHosts() ([]RemoteHost, error) {
 }
 
 // Gets information about host by IP.
-func (network *Network) GetHost(ip net.IP) (*RemoteHost, error) {
+func (network *Network) Host(ip net.IP) (*RemoteHost, error) {
 	req, err := network.client.NewRequest(ip, Endpoints.ServerHost, nil, nil, nil)
 	if err == nil {
 		var res transport.Response
@@ -69,7 +69,7 @@ func (network *Network) GetHost(ip net.IP) (*RemoteHost, error) {
 }
 
 // Gets all IPs of local network or error.
-func (network *Network) GetIPs() ([]net.IP, error) {
+func (network *Network) IPs() ([]net.IP, error) {
 	ips := []net.IP{}
 
 	local := network.LocalIP()

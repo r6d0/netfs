@@ -24,20 +24,6 @@ type RemoteTask struct {
 	Host     RemoteHost
 }
 
-// Refreshes the task data.
-func (tsk *RemoteTask) Refresh(client transport.TransportSender) error {
-	params := []string{Endpoints.FileCopyStatus.Id, strconv.Itoa(tsk.Id)}
-	req, err := client.NewRequest(tsk.Host.IP, Endpoints.FileCopyStatus.Name, params, nil, nil)
-
-	if err == nil {
-		var res transport.Response
-		if res, err = client.Send(req); err == nil {
-			_, err = res.Body(tsk)
-		}
-	}
-	return err
-}
-
 // Cancels the current task.
 func (tsk *RemoteTask) Cancel(client transport.TransportSender) error {
 	params := []string{Endpoints.FileCopyStop.Id, strconv.Itoa(tsk.Id)}

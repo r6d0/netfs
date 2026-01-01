@@ -1,62 +1,29 @@
 package main
 
-const NAME_INDEX = 1
+import (
+	"netfs/api"
+	"netfs/api/transport"
+	"netfs/internal/logger"
+	"netfs/internal/server"
+	"netfs/internal/server/database"
+	"netfs/internal/server/task"
+	"time"
+)
 
 func main() {
+	config := server.ServerConfig{
+		Network:  api.NetworkConfig{Port: 8989, Protocol: transport.HTTP, Timeout: time.Second * 5},
+		Log:      logger.LoggerConfig{Level: logger.Info},
+		Database: database.DatabaseConfig{Path: "./"},
+		Task:     task.TaskExecuteConfig{MaxAvailableTasks: 100, Copy: task.TaskCopyConfig{BufferSize: 1024}, TasksWaitingSecond: 5},
+	}
 
-	// var err error
-	// var config *netfs.Config
+	srv, err := server.NewServer(config)
+	if err != nil {
+		panic(err)
+	}
 
-	// if config, err = netfs.NewConfig(); err == nil {
-	// 	var client console.ConsoleClient
-	// 	if client, err = console.NewConsoleClient(config); err == nil {
-	// 		name := "help"
-	// 		args := os.Args
-	// 		if len(args) > NAME_INDEX {
-	// 			name = args[NAME_INDEX]
-	// 		}
-
-	// 		var command console.ConsoleCommand
-	// 		if command, err = client.GetCommand(name); err == nil {
-	// 			if len(args) > NAME_INDEX+1 {
-	// 				args = args[NAME_INDEX+1:]
-	// 			} else {
-	// 				args = []string{}
-	// 			}
-
-	// 			var res console.ConsoleCommandResult
-	// 			if res, err = command.Execute(args...); err == nil {
-	// 				print(res)
-	// 			}
-	// 		}
-	// 	}
-	// }
-
-	// if err != nil {
-	// 	panic(err)
-	// }
+	if err = srv.Start(); err != nil {
+		panic(err)
+	}
 }
-
-// func print(result console.ConsoleCommandResult) {
-// 	maxFieldSize := []int{0}
-// 	for _, line := range result.Lines {
-// 		for index, field := range line.Fields {
-// 			if index >= len(maxFieldSize) {
-// 				maxFieldSize = append(maxFieldSize, 0)
-// 			}
-// 			maxFieldSize[index] = max(maxFieldSize[index], len(field))
-// 		}
-// 	}
-
-// 	for _, line := range result.Lines {
-// 		for index, size := range maxFieldSize {
-// 			value := ""
-// 			if index < len(line.Fields) {
-// 				value = line.Fields[index]
-// 			}
-// 			fmt.Printf("%-"+strconv.Itoa(size)+"s", value)
-// 			fmt.Print(" ")
-// 		}
-// 		fmt.Println()
-// 	}
-// }

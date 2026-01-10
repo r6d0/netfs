@@ -72,7 +72,7 @@ import (
 func main() {
 	network, err := api.NewNetwork(api.NetworkConfig{Port: 8989, Protocol: transport.HTTP, Timeout: time.Second * 1})
 	if err == nil {
-		program := tea.NewProgram(console.NewConsoleViewModel(network))
+		program := tea.NewProgram(console.NewConsoleViewModel(network), tea.WithAltScreen())
 		_, err = program.Run()
 	}
 

@@ -9,13 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var docStyle = lipgloss.
-	NewStyle().
-	Align(lipgloss.Left, lipgloss.Center).
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("ff"))
-
-type hostsResponse struct {
+type HostResponse struct {
 	hosts []api.RemoteHost
 	err   error
 }
@@ -28,39 +22,45 @@ func (i item) Title() string       { return i.title }
 func (i item) Description() string { return i.desc }
 func (i item) FilterValue() string { return i.title }
 
-type HostsView struct {
-	width   int
-	height  int
-	list    list.Model
-	network *api.Network
+type HostView struct {
+	list         list.Model
+	network      *api.Network
+	defaultStyle lipgloss.Style
 }
 
-func (model HostsView) Init() tea.Cmd {
+func (model HostView) Init() tea.Cmd {
 	return func() tea.Msg {
 		hosts, err := model.network.Hosts()
-
 		newHosts := []api.RemoteHost{}
-		for index := range 100 {
-			newHosts = append(newHosts, api.RemoteHost{Name: fmt.Sprintf("(%d) ", index+1) + hosts[0].Name, IP: hosts[0].IP})
+		if err == nil && len(hosts) > 0 {
+			for index := range 100 {
+				newHosts = append(newHosts, api.RemoteHost{Name: fmt.Sprintf("(%d) ", index+1) + hosts[0].Name, IP: hosts[0].IP})
+			}
 		}
-		return hostsResponse{hosts: newHosts, err: err}
+		return HostResponse{hosts: newHosts, err: err}
 	}
 }
 
-func (model HostsView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (model HostView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var refreshListCmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case hostsResponse:
+	case HostResponse:
 		items := make([]list.Item, len(msg.hosts))
 		for index, host := range msg.hosts {
 			items[index] = item{title: host.Name, desc: host.IP.String()}
 		}
 		refreshListCmd = model.list.SetItems(items)
-	case tea.WindowSizeMsg:
-		h, v := docStyle.GetFrameSize()
-		model.list.SetSize(msg.Width-h, msg.Height-v)
-		docStyle = docStyle.Width((msg.Width / 100) * model.width).Height((msg.Height / 100) * model.height)
+	case ResizeMsg:
+		frameX, frameY := model.defaultStyle.GetFrameSize()
+		width := msg.Width - frameX
+		height := msg.Height - frameY
+		model.defaultStyle = model.
+			defaultStyle.
+			Width(width).
+			Height(height)
+
+		model.list.SetSize(width, height)
 	}
 
 	var cmd tea.Cmd
@@ -68,18 +68,23 @@ func (model HostsView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return model, tea.Sequence(refreshListCmd, cmd)
 }
 
-func (model HostsView) View() string {
-	return docStyle.Render(model.list.View())
+func (model HostView) View() string {
+	return model.defaultStyle.Render(model.list.View())
 }
 
-func NewHostsView(network *api.Network, width int, height int) HostsView {
+func NewHostView(network *api.Network) HostView {
 	lst := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
 	lst.DisableQuitKeybindings()
 	lst.SetShowFilter(false)
 	lst.SetShowHelp(false)
 	lst.SetShowTitle(false)
 	lst.SetShowStatusBar(false)
-	// lst.SetShowPagination(false)
 
-	return HostsView{list: lst, network: network, width: width, height: height}
+	defaultStyle := lipgloss.
+		NewStyle().
+		Align(lipgloss.Left, lipgloss.Left).
+		BorderForeground(lipgloss.Color("ff")).
+		BorderStyle(lipgloss.NormalBorder())
+
+	return HostView{list: lst, network: network, defaultStyle: defaultStyle}
 }

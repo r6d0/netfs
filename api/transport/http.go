@@ -193,8 +193,8 @@ func (tr *HttpTransportReceiver) Receive(endpoint string, handle func(Request) (
 		}
 
 		if err != nil {
-			httpRes.Write([]byte(err.Error()))
 			httpRes.WriteHeader(http.StatusInternalServerError)
+			httpRes.Write([]byte(err.Error()))
 		} else {
 			httpRes.Write(rawResBody)
 		}

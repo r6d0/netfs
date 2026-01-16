@@ -11,8 +11,14 @@ import (
 // Returns if the protocol is not supporting.
 var ErrUnsupportedProtocol = errors.New("unsupported protocol")
 
-// eturns if the response was unexpected.
+// Returns if the response was unexpected.
 var ErrUnexpectedAnswer = errors.New("unexpected answer")
+
+// Returns if required param not found.
+var ErrRequiredParam = errors.New("is required")
+
+// Returns if param is incorrect.
+var ErrIncorrectParamValue = errors.New("has incorrect value")
 
 type TransportPoint []string
 
@@ -21,6 +27,8 @@ type Request interface {
 	IP() net.IP
 	Endpoint() string
 	Param(string) string
+	ParamRequired(string) (string, error)
+	ParamInt(string) (int, error)
 	Params() []string
 	RawBody() []byte
 	Body(any) (any, error)

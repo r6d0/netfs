@@ -32,6 +32,7 @@ const (
 	FilePath
 	FileSize
 	FileType
+	FileParentPath
 )
 
 // If the file is not found.
@@ -56,10 +57,17 @@ const (
 
 // Abstraction over the file system for working with files.
 type Volume interface {
+	// The volume name.
 	Name() string
+	// The volume path in OS.
 	Path() string
+	// The path for volume files and directories.
+	LocalPath() string
+	// The current volume size.
+	Size() int64
 	Perm() VolumePermition
 	Info(string) (*api.FileInfo, error)
+	Children(string, int, int) ([]api.FileInfo, error)
 	Create(*api.FileInfo) error
 	Read(string, int64, int64) ([]byte, error)
 	Write(string, []byte) error
@@ -83,6 +91,14 @@ func (vl *volume) Path() string {
 	return vl.path
 }
 
+func (vl *volume) Size() int64 { // TODO. add it
+	return 0
+}
+
+func (vl *volume) LocalPath() string {
+	return strings.Join([]string{vl.name, volumeSeparator, pathSeparator}, "")
+}
+
 func (vl *volume) Perm() VolumePermition {
 	return vl.perm
 }
@@ -96,6 +112,35 @@ func (vl *volume) Info(path string) (*api.FileInfo, error) {
 				return fileInfoFromRecord(records[0])
 			}
 			err = ErrFileNotFound
+		}
+		return nil, err
+	}
+	return nil, ErrReadIsNotPermitted
+}
+
+func (vl *volume) Children(path string, skip int, limit int) ([]api.FileInfo, error) {
+	if vl.perm&Read != 0 {
+		table := vl.db.Table(VolumeFileTable)
+		records, err := table.Get(
+			database.Eq(FileParentPath, []byte(path)),
+			database.Skip(int16(skip)),
+			database.Limit(int16(limit)),
+		)
+
+		if err == nil {
+			result := make([]api.FileInfo, len(records))
+			for index, record := range records {
+				var info *api.FileInfo
+				if info, err = fileInfoFromRecord(record); err == nil {
+					result[index] = *info
+				} else {
+					break
+				}
+			}
+
+			if err == nil {
+				return result, nil
+			}
 		}
 		return nil, err
 	}
@@ -120,17 +165,17 @@ func (vl *volume) Create(info *api.FileInfo) error {
 		}
 
 		if err == nil {
-			table := vl.db.Table(VolumeFileTable)
-			records := []database.Record{fileInfoToRecord(table, info)}
-
 			end := vl.Name() + volumeSeparator
 			current := filepath.ToSlash(info.FilePath)
 			current, _ = filepath.Split(current)
 			current, _ = strings.CutSuffix(current, pathSeparator)
+
+			table := vl.db.Table(VolumeFileTable)
+			records := []database.Record{fileInfoToRecord(table, current, info)}
 			for current != end {
 				next, name := filepath.Split(current)
 				fileInfo := &api.FileInfo{FileName: name, FilePath: current, FileType: api.DIRECTORY}
-				records = append(records, fileInfoToRecord(table, fileInfo))
+				records = append(records, fileInfoToRecord(table, next, fileInfo))
 
 				next, _ = strings.CutSuffix(next, pathSeparator)
 				current = next
@@ -230,6 +275,7 @@ func (vl *volume) ResolvePath(original string) string {
 // Abstraction for working with volumes.
 type VolumeManager interface {
 	Volume(string) (Volume, error)
+	Volumes() []Volume
 }
 
 // Returns a new instance of the volume manager.
@@ -238,18 +284,28 @@ func NewVolumeManager(db database.Database) (VolumeManager, error) {
 	vlTable := db.Table(VolumeTable)
 	vlRecord := database.NewRecord(3)
 	vlRecord.SetRecordId(vlTable.NextId())
-	vlRecord.SetField(VolumeName, []byte("root"))
+	vlRecord.SetField(VolumeName, []byte("testvolume"))
 	vlRecord.SetField(VolumePath, []byte("./"))
 	vlRecord.SetUint8(VolumePerm, uint8(Read|Write))
 	vlTable.Set(vlRecord)
 
 	flTable := db.Table(VolumeFileTable)
+	flDirRecord := database.NewRecord(5)
+	flDirRecord.SetRecordId(flTable.NextId())
+	flDirRecord.SetField(FileName, []byte("testdir"))
+	flDirRecord.SetField(FilePath, []byte("testvolume:/testdir"))
+	flDirRecord.SetUint64(FileSize, 100)
+	flDirRecord.SetUint8(FileType, uint8(api.DIRECTORY))
+	flDirRecord.SetField(FileParentPath, []byte("testvolume:/"))
+	flTable.Set(flDirRecord)
+
 	flRecord := database.NewRecord(5)
 	flRecord.SetRecordId(flTable.NextId())
-	flRecord.SetField(FileName, []byte("myfile.txt"))
-	flRecord.SetField(FilePath, []byte("root:/myfile.txt"))
+	flRecord.SetField(FileName, []byte("testfile.txt"))
+	flRecord.SetField(FilePath, []byte("testvolume:/testdir/testfile.txt"))
 	flRecord.SetUint64(FileSize, 100)
 	flRecord.SetUint8(FileType, uint8(api.FILE))
+	flRecord.SetField(FileParentPath, []byte("testvolume:/testdir"))
 	flTable.Set(flRecord)
 
 	records, err := vlTable.Get()
@@ -290,6 +346,12 @@ func (mng *volumeManager) Volume(path string) (Volume, error) {
 	return nil, ErrVolumeNotFound
 }
 
+func (mng *volumeManager) Volumes() []Volume {
+	copyVolumes := make([]Volume, len(mng.volumes))
+	copy(copyVolumes, mng.volumes)
+	return copyVolumes
+}
+
 func volumeFromRecord(db database.Database, record database.Record) (Volume, error) {
 	return &volume{
 		id:   record.GetRecordId(),
@@ -300,13 +362,14 @@ func volumeFromRecord(db database.Database, record database.Record) (Volume, err
 	}, nil
 }
 
-func fileInfoToRecord(table database.Table, info *api.FileInfo) database.Record {
-	record := database.NewRecord(4)
+func fileInfoToRecord(table database.Table, parentPath string, info *api.FileInfo) database.Record {
+	record := database.NewRecord(5)
 	record.SetRecordId(table.NextId())
 	record.SetField(FileName, []byte(info.FileName))
 	record.SetField(FilePath, []byte(info.FilePath))
 	record.SetUint8(FileType, uint8(info.FileType))
 	record.SetUint64(FileSize, uint64(info.FileSize))
+	record.SetField(FileParentPath, []byte(parentPath))
 	return record
 }
 

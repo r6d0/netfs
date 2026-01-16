@@ -1,38 +1,47 @@
 package api_test
 
 import (
-	"encoding/json"
-	"net/http"
+	"errors"
 	"netfs/api"
 	"netfs/api/transport"
-	"strconv"
 	"testing"
 	"time"
 )
 
+var network *api.Network
+var local api.RemoteHost
+var rec transport.TransportReceiver
+var config = api.NetworkConfig{Port: 9184, Protocol: transport.HTTP, Timeout: 5 * time.Second}
+
+func beforeEach() {
+	rec, _ = transport.NewReceiver(config.Protocol, config.Port)
+
+	network, _ = api.NewNetwork(config)
+	local = network.LocalHost()
+	rec.Receive(api.Endpoints.ServerHost, func(transport.Request) ([]byte, any, error) {
+		return nil, local, nil
+	})
+	rec.Receive(api.Endpoints.FileInfo.Name, func(transport.Request) ([]byte, any, error) {
+		return nil, api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024}, nil
+	})
+	rec.Start()
+}
+
+func afterEach() {
+	rec.Stop()
+}
+
 func TestWriteSuccess(t *testing.T) {
-	config := api.NetworkConfig{Port: 7, Protocol: transport.HTTP, Timeout: 5 * time.Second}
-	network, _ := api.NewNetwork(config)
-	local := network.LocalHost()
+	beforeEach()
+	defer afterEach()
 
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(local)
+	rec.Receive(api.Endpoints.FileWrite.Name, func(req transport.Request) ([]byte, any, error) {
+		if req.Param(api.Endpoints.FileWrite.Path) != "./test_file.txt" {
+			return nil, nil, errors.New("can't submit request")
+		}
 
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileInfo.Name, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(
-				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
-			)
-
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileWrite.Name, func(w http.ResponseWriter, r *http.Request) {})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
-	}()
-	time.Sleep(2 * time.Second)
+		return nil, nil, nil
+	})
 
 	host, _ := network.Host(local.IP)
 	file, _ := host.File(network.Transport(), "./test_file.txt")
@@ -43,27 +52,12 @@ func TestWriteSuccess(t *testing.T) {
 }
 
 func TestWriteResponseError(t *testing.T) {
-	config := api.NetworkConfig{Port: 8, Protocol: transport.HTTP, Timeout: 5 * time.Second}
-	network, _ := api.NewNetwork(config)
-	local := network.LocalHost()
+	beforeEach()
+	defer afterEach()
 
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(local)
-
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileInfo.Name, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(
-				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
-			)
-
-			w.Write(data)
-		})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
-	}()
-	time.Sleep(2 * time.Second)
+	rec.Receive(api.Endpoints.FileWrite.Name, func(transport.Request) ([]byte, any, error) {
+		return nil, nil, errors.New("can't submit request")
+	})
 
 	host, _ := network.Host(local.IP)
 	file, _ := host.File(network.Transport(), "./test_file.txt")
@@ -74,28 +68,12 @@ func TestWriteResponseError(t *testing.T) {
 }
 
 func TestCreateSuccess(t *testing.T) {
-	config := api.NetworkConfig{Port: 9, Protocol: transport.HTTP, Timeout: 5 * time.Second}
-	network, _ := api.NewNetwork(config)
-	local := network.LocalHost()
+	beforeEach()
+	defer afterEach()
 
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(local)
-
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileInfo.Name, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(
-				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
-			)
-
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileCreate, func(w http.ResponseWriter, r *http.Request) {})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
-	}()
-	time.Sleep(2 * time.Second)
+	rec.Receive(api.Endpoints.FileCreate, func(transport.Request) ([]byte, any, error) {
+		return nil, nil, nil
+	})
 
 	host, _ := network.Host(local.IP)
 	file, _ := host.File(network.Transport(), "./test_file.txt")
@@ -106,27 +84,12 @@ func TestCreateSuccess(t *testing.T) {
 }
 
 func TestCreateResponseError(t *testing.T) {
-	config := api.NetworkConfig{Port: 10, Protocol: transport.HTTP, Timeout: 5 * time.Second}
-	network, _ := api.NewNetwork(config)
-	local := network.LocalHost()
+	beforeEach()
+	defer afterEach()
 
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(local)
-
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileInfo.Name, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(
-				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
-			)
-
-			w.Write(data)
-		})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
-	}()
-	time.Sleep(2 * time.Second)
+	rec.Receive(api.Endpoints.FileCreate, func(transport.Request) ([]byte, any, error) {
+		return nil, nil, errors.New("can't submit request")
+	})
 
 	host, _ := network.Host(local.IP)
 	file, _ := host.File(network.Transport(), "./test_file.txt")
@@ -137,34 +100,12 @@ func TestCreateResponseError(t *testing.T) {
 }
 
 func TestCopyToSuccess(t *testing.T) {
-	config := api.NetworkConfig{Port: 11, Protocol: transport.HTTP, Timeout: 5 * time.Second}
-	network, _ := api.NewNetwork(config)
-	local := network.LocalHost()
+	beforeEach()
+	defer afterEach()
 
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(local)
-
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileInfo.Name, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(
-				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
-			)
-
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileCopyStart, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(
-				api.RemoteTask{Id: 1, Status: api.Waiting, Host: local},
-			)
-
-			w.Write(data)
-		})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
-	}()
-	time.Sleep(2 * time.Second)
+	rec.Receive(api.Endpoints.FileCopyStart, func(transport.Request) ([]byte, any, error) {
+		return nil, api.RemoteTask{Id: 1, Status: api.Waiting, Host: local}, nil
+	})
 
 	host, _ := network.Host(local.IP)
 	file, _ := host.File(network.Transport(), "./test_file.txt")
@@ -181,27 +122,11 @@ func TestCopyToSuccess(t *testing.T) {
 }
 
 func TestCopyToResponseError(t *testing.T) {
-	config := api.NetworkConfig{Port: 12, Protocol: transport.HTTP, Timeout: 5 * time.Second}
-	network, _ := api.NewNetwork(config)
-	local := network.LocalHost()
-
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(local)
-
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileInfo.Name, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(
-				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
-			)
-
-			w.Write(data)
-		})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
-	}()
-	time.Sleep(2 * time.Second)
+	beforeEach()
+	defer afterEach()
+	rec.Receive(api.Endpoints.FileCopyStart, func(transport.Request) ([]byte, any, error) {
+		return nil, nil, errors.New("can't submit request")
+	})
 
 	host, _ := network.Host(local.IP)
 	file, _ := host.File(network.Transport(), "./test_file.txt")
@@ -212,28 +137,16 @@ func TestCopyToResponseError(t *testing.T) {
 }
 
 func TestFileRemoveSuccess(t *testing.T) {
-	config := api.NetworkConfig{Port: 9, Protocol: transport.HTTP, Timeout: 5 * time.Second}
-	network, _ := api.NewNetwork(config)
-	local := network.LocalHost()
+	beforeEach()
+	defer afterEach()
 
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(local)
+	rec.Receive(api.Endpoints.FileRemove.Name, func(req transport.Request) ([]byte, any, error) {
+		if req.Param(api.Endpoints.FileRemove.Path) != "./test_file.txt" {
+			return nil, nil, errors.New("can't submit request")
+		}
 
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileInfo.Name, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(
-				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
-			)
-
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileRemove.Name, func(w http.ResponseWriter, r *http.Request) {})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
-	}()
-	time.Sleep(2 * time.Second)
+		return nil, nil, nil
+	})
 
 	host, _ := network.Host(local.IP)
 	file, _ := host.File(network.Transport(), "./test_file.txt")
@@ -244,31 +157,64 @@ func TestFileRemoveSuccess(t *testing.T) {
 }
 
 func TestFileRemoveResponseError(t *testing.T) {
-	config := api.NetworkConfig{Port: 10, Protocol: transport.HTTP, Timeout: 5 * time.Second}
-	network, _ := api.NewNetwork(config)
-	local := network.LocalHost()
+	beforeEach()
+	defer afterEach()
 
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(local)
-
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileInfo.Name, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(
-				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
-			)
-
-			w.Write(data)
-		})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
-	}()
-	time.Sleep(2 * time.Second)
+	rec.Receive(api.Endpoints.FileRemove.Name, func(transport.Request) ([]byte, any, error) {
+		return nil, nil, errors.New("can't submit request")
+	})
 
 	host, _ := network.Host(local.IP)
 	file, _ := host.File(network.Transport(), "./test_file.txt")
 	err := file.Remove(network.Transport())
+	if err == nil {
+		t.Fatal("error should be not nil")
+	}
+}
+
+func TestChildrenSuccess(t *testing.T) {
+	beforeEach()
+	defer afterEach()
+
+	rec.Receive(api.Endpoints.FileChildren.Name, func(req transport.Request) ([]byte, any, error) {
+		if req.Param(api.Endpoints.FileChildren.Path) != "./test_file.txt" {
+			return nil, nil, errors.New("can't submit request")
+		}
+
+		if req.Param(api.Endpoints.FileChildren.Skip) != "0" {
+			return nil, nil, errors.New("can't submit request")
+		}
+
+		if req.Param(api.Endpoints.FileChildren.Limit) != "100" {
+			return nil, nil, errors.New("can't submit request")
+		}
+
+		return nil, []api.RemoteFile{{Info: api.FileInfo{FilePath: "./test_file_1.txt"}}}, nil
+	})
+
+	host, _ := network.Host(local.IP)
+	file, _ := host.File(network.Transport(), "./test_file.txt")
+	children, err := file.Children(network.Transport(), 0, 100)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	if len(children) == 0 {
+		t.Fatal("children should be not empty")
+	}
+}
+
+func TestChildrenResponseError(t *testing.T) {
+	beforeEach()
+	defer afterEach()
+
+	rec.Receive(api.Endpoints.FileChildren.Name, func(req transport.Request) ([]byte, any, error) {
+		return nil, nil, errors.New("can't submit request")
+	})
+
+	host, _ := network.Host(local.IP)
+	file, _ := host.File(network.Transport(), "./test_file.txt")
+	_, err := file.Children(network.Transport(), 0, 100)
 	if err == nil {
 		t.Fatal("error should be not nil")
 	}

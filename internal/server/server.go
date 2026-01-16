@@ -14,6 +14,8 @@ import (
 	"syscall"
 )
 
+const rootDirectory = "/"
+
 // The netfs server configuration.
 type ServerConfig struct {
 	Network  api.NetworkConfig
@@ -38,6 +40,7 @@ func (srv *Server) Start() error {
 	srv.receiver.Receive(api.Endpoints.ServerStop, srv.StopServerHandle)
 	srv.receiver.Receive(api.Endpoints.ServerHost, srv.ServerHostHandle)
 	srv.receiver.Receive(api.Endpoints.FileInfo.Name, srv.FileInfoHandle)
+	srv.receiver.Receive(api.Endpoints.FileChildren.Name, srv.FileChildrenHandle)
 	srv.receiver.Receive(api.Endpoints.FileCreate, srv.FileCreateHandle)
 	srv.receiver.Receive(api.Endpoints.FileWrite.Name, srv.FileWriteHandle)
 	srv.receiver.Receive(api.Endpoints.FileRemove.Name, srv.FileRemoveHandle)
@@ -108,19 +111,57 @@ func (srv *Server) ServerHostHandle(req transport.Request) ([]byte, any, error) 
 }
 
 // Returns information about file.
-func (srv *Server) FileInfoHandle(req transport.Request) ([]byte, any, error) { // TODO. add validation
-	path := req.Param(api.Endpoints.FileInfo.Path)
-	volume, err := srv.volumes.Volume(path)
+func (srv *Server) FileInfoHandle(req transport.Request) ([]byte, any, error) {
+	path, err := req.ParamRequired(api.Endpoints.FileInfo.Path)
 	if err == nil {
-		var info *api.FileInfo
-		info, err = volume.Info(path)
-		return nil, info, err
+		if path == rootDirectory { // TODO. Use volume API
+			info := api.FileInfo{FileName: "", FilePath: rootDirectory, FileType: api.DIRECTORY, FileSize: 0}
+			return nil, info, err
+		}
+
+		var volume volume.Volume
+		if volume, err = srv.volumes.Volume(path); err == nil {
+			if path == volume.LocalPath() {
+				info := api.FileInfo{FileName: volume.Name(), FilePath: volume.LocalPath(), FileType: api.DIRECTORY, FileSize: volume.Size()}
+				return nil, info, err
+			}
+
+			var info *api.FileInfo
+			info, err = volume.Info(path)
+			return nil, info, err
+		}
 	}
 	return nil, nil, err
 }
 
+// Returns children of the directory.
+func (srv *Server) FileChildrenHandle(req transport.Request) ([]byte, any, error) {
+	var children []api.FileInfo
+
+	path, pathErr := req.ParamRequired(api.Endpoints.FileChildren.Path)
+	skip, skipErr := req.ParamInt(api.Endpoints.FileChildren.Skip)
+	limit, limitErr := req.ParamInt(api.Endpoints.FileChildren.Limit)
+
+	err := errors.Join(pathErr, skipErr, limitErr)
+	if err == nil {
+		if path == rootDirectory { // TODO. Use volume API
+			volumes := srv.volumes.Volumes()
+			children = make([]api.FileInfo, len(volumes))
+			for index, volume := range volumes {
+				children[index] = api.FileInfo{FileName: volume.Name(), FilePath: volume.LocalPath(), FileType: api.DIRECTORY, FileSize: volume.Size()}
+			}
+		} else {
+			var volume volume.Volume
+			if volume, err = srv.volumes.Volume(path); err == nil {
+				children, err = volume.Children(path, skip, limit)
+			}
+		}
+	}
+	return nil, children, err
+}
+
 // Creates new file or directory by api.FileInfo.
-func (srv *Server) FileCreateHandle(req transport.Request) ([]byte, any, error) {
+func (srv *Server) FileCreateHandle(req transport.Request) ([]byte, any, error) { // TODO. Add validation
 	info := &api.FileInfo{}
 	_, err := req.Body(info)
 	if err == nil {
@@ -134,7 +175,7 @@ func (srv *Server) FileCreateHandle(req transport.Request) ([]byte, any, error) 
 }
 
 // Writes data to file.
-func (srv *Server) FileWriteHandle(req transport.Request) ([]byte, any, error) {
+func (srv *Server) FileWriteHandle(req transport.Request) ([]byte, any, error) { // TODO. Add validation
 	path := req.Param(api.Endpoints.FileWrite.Path)
 	volume, err := srv.volumes.Volume(path)
 	if err == nil {
@@ -144,7 +185,7 @@ func (srv *Server) FileWriteHandle(req transport.Request) ([]byte, any, error) {
 }
 
 // Removes file or directory.
-func (srv *Server) FileRemoveHandle(req transport.Request) ([]byte, any, error) {
+func (srv *Server) FileRemoveHandle(req transport.Request) ([]byte, any, error) { // TODO. Add validation
 	path := req.Param(api.Endpoints.FileRemove.Path)
 	volume, err := srv.volumes.Volume(path)
 	if err == nil {
@@ -171,7 +212,7 @@ func (srv *Server) FileCopyStartHandle(req transport.Request) ([]byte, any, erro
 }
 
 // Returns status of the task.
-func (srv *Server) FileCopyStatusHandle(req transport.Request) ([]byte, any, error) {
+func (srv *Server) FileCopyStatusHandle(req transport.Request) ([]byte, any, error) { // TODO. Add validation
 	param := req.Param(api.Endpoints.FileCopyStatus.Id)
 	id, err := strconv.Atoi(param)
 	if err == nil {
@@ -184,7 +225,7 @@ func (srv *Server) FileCopyStatusHandle(req transport.Request) ([]byte, any, err
 }
 
 // Stops the task.
-func (srv *Server) FileCopyCancelHandle(req transport.Request) ([]byte, any, error) {
+func (srv *Server) FileCopyCancelHandle(req transport.Request) ([]byte, any, error) { // TODO. Add validation
 	param := req.Param(api.Endpoints.FileCopyStop.Id)
 	id, err := strconv.Atoi(param)
 	if err == nil {

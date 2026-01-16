@@ -75,6 +75,7 @@ type queryCondition interface {
 
 type queryContext struct {
 	Conditions []queryCondition
+	Skip       int16
 	Limit      int16
 }
 
@@ -113,6 +114,19 @@ func (opt *eqOption) apply(ctx *queryContext) {
 
 func Eq(field RecordField, value []byte) Option {
 	return &eqOption{Field: field, Value: value}
+}
+
+type skipOption struct {
+	Skip int16
+}
+
+func (opt *skipOption) apply(ctx *queryContext) {
+	ctx.Limit = opt.Skip
+}
+
+// TODO. use it.
+func Skip(skip int16) Option {
+	return &skipOption{Skip: skip}
 }
 
 type limitOption struct {

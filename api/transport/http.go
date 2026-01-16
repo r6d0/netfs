@@ -42,6 +42,26 @@ func (req *httpRequest) Param(name string) string {
 	return ""
 }
 
+func (req *httpRequest) ParamRequired(name string) (string, error) {
+	param := req.Param(name)
+	if param == "" {
+		return param, ErrRequiredParam
+	}
+	return param, nil
+}
+
+func (req *httpRequest) ParamInt(name string) (int, error) {
+	param := 0
+	value, err := req.ParamRequired(name)
+	if err == nil {
+		param, err = strconv.Atoi(value)
+		if err != nil {
+			err = errors.Join(fmt.Errorf("[%s] %w", name, ErrIncorrectParamValue), err)
+		}
+	}
+	return param, err
+}
+
 func (req *httpRequest) Params() []string {
 	return req.params
 }
@@ -193,8 +213,8 @@ func (tr *HttpTransportReceiver) Receive(endpoint string, handle func(Request) (
 		}
 
 		if err != nil {
-			httpRes.Write([]byte(err.Error()))
 			httpRes.WriteHeader(http.StatusInternalServerError)
+			httpRes.Write([]byte(err.Error()))
 		} else {
 			httpRes.Write(rawResBody)
 		}

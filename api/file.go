@@ -47,8 +47,12 @@ func (file *RemoteFile) Children(client transport.TransportSender, skip int, lim
 	if err == nil {
 		var res transport.Response
 		if res, err = client.Send(req); err == nil {
-			result := []RemoteFile{}
-			if _, err = res.Body(&result); err == nil {
+			files := []FileInfo{}
+			if _, err = res.Body(&files); err == nil {
+				result := make([]RemoteFile, len(files))
+				for index, info := range files {
+					result[index] = RemoteFile{Info: info, Host: file.Host}
+				}
 				return result, nil
 			}
 		}

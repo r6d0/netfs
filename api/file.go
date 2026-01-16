@@ -1,6 +1,9 @@
 package api
 
-import "netfs/api/transport"
+import (
+	"netfs/api/transport"
+	"strconv"
+)
 
 // Type of file.
 type FileType byte
@@ -30,6 +33,31 @@ type FileInfo struct {
 type RemoteFile struct {
 	Host RemoteHost
 	Info FileInfo
+}
+
+// Returns children of the directory.
+func (file *RemoteFile) Children(client transport.TransportSender, skip int, limit int) ([]RemoteFile, error) {
+	params := []string{
+		Endpoints.FileChildren.Path, file.Info.FilePath,
+		Endpoints.FileChildren.Skip, strconv.Itoa(skip),
+		Endpoints.FileChildren.Limit, strconv.Itoa(limit),
+	}
+
+	req, err := client.NewRequest(file.Host.IP, Endpoints.FileChildren.Name, params, nil, nil)
+	if err == nil {
+		var res transport.Response
+		if res, err = client.Send(req); err == nil {
+			files := []FileInfo{}
+			if _, err = res.Body(&files); err == nil {
+				result := make([]RemoteFile, len(files))
+				for index, info := range files {
+					result[index] = RemoteFile{Info: info, Host: file.Host}
+				}
+				return result, nil
+			}
+		}
+	}
+	return nil, err
 }
 
 // Writes data to remote file.

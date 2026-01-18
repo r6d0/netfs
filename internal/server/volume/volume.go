@@ -249,7 +249,7 @@ func (vl *volume) Write(path string, data []byte) error {
 func (vl *volume) Remove(path string) error {
 	if vl.perm&Write != 0 {
 		table := vl.db.Table(VolumeFileTable)
-		records, err := table.Get(database.Eq(FilePath, []byte(path)))
+		records, err := table.Get(database.Eq(FilePath, []byte(path))) // TODO. remove children of directory
 		if err == nil {
 			if len(records) == 1 {
 				if err = table.Del(database.Id(records[0].GetRecordId())); err == nil {
@@ -289,11 +289,18 @@ func NewVolumeManager(db database.Database) (VolumeManager, error) {
 	vlRecord.SetUint8(VolumePerm, uint8(Read|Write))
 	vlTable.Set(vlRecord)
 
+	vlRecord2 := database.NewRecord(3)
+	vlRecord2.SetRecordId(vlTable.NextId())
+	vlRecord2.SetField(VolumeName, []byte("testvolume_readonly"))
+	vlRecord2.SetField(VolumePath, []byte("./testvolume_readonly"))
+	vlRecord2.SetUint8(VolumePerm, uint8(Read))
+	vlTable.Set(vlRecord2)
+
 	flTable := db.Table(VolumeFileTable)
 	flDirRecord := database.NewRecord(5)
 	flDirRecord.SetRecordId(flTable.NextId())
 	flDirRecord.SetField(FileName, []byte("testdir"))
-	flDirRecord.SetField(FilePath, []byte("testvolume:/testdir"))
+	flDirRecord.SetField(FilePath, []byte("testvolume:/testdir/"))
 	flDirRecord.SetUint64(FileSize, 100)
 	flDirRecord.SetUint8(FileType, uint8(api.DIRECTORY))
 	flDirRecord.SetField(FileParentPath, []byte("testvolume:/"))
@@ -305,7 +312,7 @@ func NewVolumeManager(db database.Database) (VolumeManager, error) {
 	flRecord.SetField(FilePath, []byte("testvolume:/testdir/testfile.txt"))
 	flRecord.SetUint64(FileSize, 100)
 	flRecord.SetUint8(FileType, uint8(api.FILE))
-	flRecord.SetField(FileParentPath, []byte("testvolume:/testdir"))
+	flRecord.SetField(FileParentPath, []byte("testvolume:/testdir/"))
 	flTable.Set(flRecord)
 
 	records, err := vlTable.Get()

@@ -114,6 +114,8 @@ func (srv *Server) ServerHostHandle(req transport.Request) ([]byte, any, error) 
 func (srv *Server) FileInfoHandle(req transport.Request) ([]byte, any, error) {
 	path, err := req.ParamRequired(api.Endpoints.FileInfo.Path)
 	if err == nil {
+		srv.log.Info("FileInfoHandle(%s)", path)
+
 		if path == rootDirectory { // TODO. Use volume API
 			info := api.FileInfo{FileName: "", FilePath: rootDirectory, FileType: api.DIRECTORY, FileSize: 0}
 			return nil, info, err
@@ -142,6 +144,7 @@ func (srv *Server) FileChildrenHandle(req transport.Request) ([]byte, any, error
 	skip, skipErr := req.ParamInt(api.Endpoints.FileChildren.Skip)
 	limit, limitErr := req.ParamInt(api.Endpoints.FileChildren.Limit)
 
+	srv.log.Info("FileChildrenHandle(%s)", path)
 	err := errors.Join(pathErr, skipErr, limitErr)
 	if err == nil {
 		if path == rootDirectory { // TODO. Use volume API

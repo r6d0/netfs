@@ -9,7 +9,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type HostResponse struct {
+type UpdateHostMsg struct {
+	Host api.RemoteHost
+}
+
+type UpdateHostsMsg struct {
 	hosts []api.RemoteHost
 	err   error
 }
@@ -37,20 +41,24 @@ func (model HostView) Init() tea.Cmd {
 				newHosts = append(newHosts, api.RemoteHost{Name: fmt.Sprintf("(%d) ", index+1) + hosts[0].Name, IP: hosts[0].IP})
 			}
 		}
-		return HostResponse{hosts: newHosts, err: err}
+		return UpdateHostsMsg{hosts: newHosts, err: err}
 	}
 }
 
 func (model HostView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var refreshListCmd tea.Cmd
+	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case HostResponse:
+	case tea.KeyMsg:
+		if msg.String() == EnterKeyMsg {
+			cmd = func() tea.Msg { return UpdateHostMsg{Host: model.network.LocalHost()} }
+		}
+	case UpdateHostsMsg:
 		items := make([]list.Item, len(msg.hosts))
 		for index, host := range msg.hosts {
 			items[index] = item{title: host.Name, desc: host.IP.String()}
 		}
-		refreshListCmd = model.list.SetItems(items)
+		cmd = model.list.SetItems(items)
 	case ResizeMsg:
 		frameX, frameY := model.defaultStyle.GetFrameSize()
 		width := msg.Width - frameX
@@ -63,9 +71,9 @@ func (model HostView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model.list.SetSize(width, height)
 	}
 
-	var cmd tea.Cmd
-	model.list, cmd = model.list.Update(msg)
-	return model, tea.Sequence(refreshListCmd, cmd)
+	var listCmd tea.Cmd
+	model.list, listCmd = model.list.Update(msg)
+	return model, tea.Sequence(cmd, listCmd)
 }
 
 func (model HostView) View() string {

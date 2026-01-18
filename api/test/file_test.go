@@ -4,6 +4,7 @@ import (
 	"errors"
 	"netfs/api"
 	"netfs/api/transport"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -21,8 +22,10 @@ func beforeEach() {
 	rec.Receive(api.Endpoints.ServerHost, func(transport.Request) ([]byte, any, error) {
 		return nil, local, nil
 	})
-	rec.Receive(api.Endpoints.FileInfo.Name, func(transport.Request) ([]byte, any, error) {
-		return nil, api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024}, nil
+	rec.Receive(api.Endpoints.FileInfo.Name, func(req transport.Request) ([]byte, any, error) {
+		path, err := req.ParamRequired(api.Endpoints.FileInfo.Path)
+		_, name := filepath.Split(path)
+		return nil, api.FileInfo{FileName: name, FilePath: path, FileType: api.FILE, FileSize: 1024}, err
 	})
 	rec.Start()
 }
@@ -217,5 +220,24 @@ func TestChildrenResponseError(t *testing.T) {
 	_, err := file.Children(network.Transport(), 0, 100)
 	if err == nil {
 		t.Fatal("error should be not nil")
+	}
+}
+
+func TestParentSuccess(t *testing.T) {
+	beforeEach()
+	defer afterEach()
+
+	path := "testvolume:/test_dir/test_file.txt"
+	host, _ := network.Host(local.IP)
+	file, _ := host.File(network.Transport(), path)
+
+	parent, err := file.Parent(network.Transport())
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	dir, _ := filepath.Split(path)
+	if parent.Info.FilePath != dir {
+		t.Fatalf("path of the parent directory should be [%s], but it is [%s]", dir, parent.Info.FilePath)
 	}
 }

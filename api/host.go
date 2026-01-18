@@ -6,10 +6,17 @@ import (
 	"strconv"
 )
 
+const rootDirectory = "/"
+
 // Information about host.
 type RemoteHost struct {
 	Name string
 	IP   net.IP
+}
+
+// Returns root of the current host.
+func (host RemoteHost) Root() *RemoteFile {
+	return &RemoteFile{Host: host, Info: FileInfo{FileType: DIRECTORY, FilePath: rootDirectory}}
 }
 
 // Returns information about file by path.

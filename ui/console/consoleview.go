@@ -8,6 +8,9 @@ import (
 )
 
 // TODO. from settings?
+const EnterKeyMsg = "enter"
+const BackspaceKeyMsg = "backspace"
+const AltBackspaceKeyMsg = "alt+backspace"
 const QuitKeyMsg = "alt+q"
 const HostActiveKeyMsg = "alt+h"
 const FileActiveKeyMsg = "alt+f"
@@ -60,6 +63,12 @@ func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			model.activeView = File
 			return model, nil
 		}
+
+	case UpdateFilesMsg:
+		model.activeView = File
+		model.fileView, fileViewCmd = model.fileView.Update(msg)
+		return model, nil
+
 	case tea.WindowSizeMsg:
 		frameX, frameY := model.defaultStyle.GetFrameSize()
 		width := float32(msg.Width - frameX)

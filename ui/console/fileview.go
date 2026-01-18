@@ -42,9 +42,9 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
+		switch msg.Type {
 		// Enter to the selected directory.
-		case EnterKeyMsg:
+		case tea.KeyEnter: // TODO. from settings?
 			item := model.list.SelectedItem()
 			file := item.(*FileViewItem).File
 			if file.Info.FileType == api.DIRECTORY {
@@ -52,21 +52,21 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				model.prev = &prev
 				cmd = model.refreshFilesList(file)
 			}
-		// Exit from the selected directory.
-		case BackspaceKeyMsg:
-			if model.prev.Prev != nil {
+		case tea.KeyBackspace: // TODO. from settings?
+			// Exit to the root directory of the selected host.
+			if msg.Alt {
+				file := model.host.Root()
+				model.prev = &FileViewHistoryNode{File: file}
+				cmd = model.refreshFilesList(file)
+				// Exit from the selected directory.
+			} else if model.prev.Prev != nil {
 				model.prev = model.prev.Prev
 				cmd = model.refreshFilesList(model.prev.File)
 			}
-		// Exit to the root directory of the selected host.
-		case AltBackspaceKeyMsg:
-			file := model.host.Root()
-			model.prev = &FileViewHistoryNode{File: file}
-			cmd = model.refreshFilesList(file)
 		}
 	case UpdateHostMsg:
-		file := model.host.Root()
-		model.host = &msg.Host
+		file := msg.Host.Root()
+		model.host = msg.Host
 		model.prev = &FileViewHistoryNode{File: file}
 		cmd = model.refreshFilesList(file)
 	case UpdateFilesMsg:

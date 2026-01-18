@@ -3,12 +3,34 @@ package console
 import (
 	"netfs/api"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
+type UpdateFilesMsg struct {
+	Items []list.Item
+}
+
+type FileViewHistoryNode struct {
+	File *api.RemoteFile
+	Prev *FileViewHistoryNode
+}
+
+type FileViewItem struct {
+	File *api.RemoteFile
+}
+
+func (item FileViewItem) Title() string       { return item.File.Info.FileName }
+func (item FileViewItem) Description() string { return item.File.Info.FilePath }
+func (item FileViewItem) FilterValue() string { return item.File.Info.FileName }
+
 type FileView struct {
-	defaultStyle lipgloss.Style
+	list    list.Model
+	style   lipgloss.Style
+	prev    *FileViewHistoryNode
+	host    *api.RemoteHost
+	network *api.Network
 }
 
 func (model FileView) Init() tea.Cmd {
@@ -16,30 +38,85 @@ func (model FileView) Init() tea.Cmd {
 }
 
 func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		// Enter to the selected directory.
+		case EnterKeyMsg:
+			item := model.list.SelectedItem()
+			file := item.(*FileViewItem).File
+			if file.Info.FileType == api.DIRECTORY {
+				prev := FileViewHistoryNode{File: file, Prev: model.prev}
+				model.prev = &prev
+				cmd = model.refreshFilesList(file)
+			}
+		// Exit from the selected directory.
+		case BackspaceKeyMsg:
+			if model.prev.Prev != nil {
+				model.prev = model.prev.Prev
+				cmd = model.refreshFilesList(model.prev.File)
+			}
+		// Exit to the root directory of the selected host.
+		case AltBackspaceKeyMsg:
+			file := model.host.Root()
+			model.prev = &FileViewHistoryNode{File: file}
+			cmd = model.refreshFilesList(file)
+		}
+	case UpdateHostMsg:
+		file := model.host.Root()
+		model.host = &msg.Host
+		model.prev = &FileViewHistoryNode{File: file}
+		cmd = model.refreshFilesList(file)
+	case UpdateFilesMsg:
+		cmd = model.list.SetItems(msg.Items)
 	case ResizeMsg:
-		frameX, frameY := model.defaultStyle.GetFrameSize()
-		model.defaultStyle = model.
-			defaultStyle.
-			Width(msg.Width - frameX).
-			Height(msg.Height - frameY)
+		frameX, frameY := model.style.GetFrameSize()
+		width := msg.Width - frameX
+		height := msg.Height - frameY
+		model.style = model.
+			style.
+			Width(width).
+			Height(height)
+
+		model.list.SetSize(width, height)
 	}
 
-	return model, nil
+	var listCmd tea.Cmd
+	model.list, listCmd = model.list.Update(msg)
+	return model, tea.Sequence(cmd, listCmd)
 }
 
 func (model FileView) View() string {
-	return model.defaultStyle.Render("HELLO")
+	return model.style.Render(model.list.View())
 }
 
 func NewFileView(network *api.Network) tea.Model {
-	defaultStyle := lipgloss.
+	lst := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
+	lst.DisableQuitKeybindings()
+	lst.SetShowFilter(false)
+	lst.SetShowHelp(false)
+	lst.SetShowTitle(false)
+	lst.SetShowStatusBar(false)
+
+	style := lipgloss.
 		NewStyle().
-		Align(lipgloss.Center, lipgloss.Center).
-		Foreground(lipgloss.Color("#FAFAFA")).
-		Background(lipgloss.Color("#7D56F4")).
+		Align(lipgloss.Left, lipgloss.Left).
 		BorderForeground(lipgloss.Color("ff")).
 		BorderStyle(lipgloss.NormalBorder())
 
-	return FileView{defaultStyle: defaultStyle}
+	return FileView{list: lst, style: style, network: network}
+}
+
+func (model FileView) refreshFilesList(file *api.RemoteFile) tea.Cmd {
+	return func() tea.Msg {
+		// TODO. Show error.
+		children, _ := file.Children(model.network.Transport(), 0, 100) // TODO. from settings?
+		items := make([]list.Item, len(children))
+		for index, file := range children {
+			items[index] = &FileViewItem{File: &file}
+		}
+		return UpdateFilesMsg{Items: items}
+	}
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"netfs/api/transport"
+	"path/filepath"
 	"strconv"
 )
 
@@ -29,10 +30,16 @@ type FileInfo struct {
 	FileSize int64
 }
 
-// File on a remote resource.
+// File on a remote host.
 type RemoteFile struct {
 	Host RemoteHost
 	Info FileInfo
+}
+
+// The function returns parent of the current file.
+func (file *RemoteFile) Parent(client transport.TransportSender) (*RemoteFile, error) {
+	parent, _ := filepath.Split(file.Info.FilePath)
+	return file.Host.File(client, parent)
 }
 
 // Returns children of the directory.

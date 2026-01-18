@@ -1,7 +1,6 @@
 package console
 
 import (
-	"fmt"
 	"netfs/api"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -10,38 +9,39 @@ import (
 )
 
 type UpdateHostMsg struct {
-	Host api.RemoteHost
+	Host *api.RemoteHost
 }
 
 type UpdateHostsMsg struct {
-	hosts []api.RemoteHost
-	err   error
+	Items []list.Item
+	Error error
 }
 
-type item struct {
-	title, desc string
+type HostViewItem struct {
+	Host *api.RemoteHost
 }
 
-func (i item) Title() string       { return i.title }
-func (i item) Description() string { return i.desc }
-func (i item) FilterValue() string { return i.title }
+func (item HostViewItem) Title() string       { return item.Host.Name }
+func (item HostViewItem) Description() string { return item.Host.IP.String() }
+func (item HostViewItem) FilterValue() string { return item.Host.Name }
 
 type HostView struct {
-	list         list.Model
-	network      *api.Network
-	defaultStyle lipgloss.Style
+	list    list.Model
+	style   lipgloss.Style
+	network *api.Network
 }
 
 func (model HostView) Init() tea.Cmd {
 	return func() tea.Msg {
 		hosts, err := model.network.Hosts()
-		newHosts := []api.RemoteHost{}
 		if err == nil && len(hosts) > 0 {
-			for index := range 100 {
-				newHosts = append(newHosts, api.RemoteHost{Name: fmt.Sprintf("(%d) ", index+1) + hosts[0].Name, IP: hosts[0].IP})
+			items := make([]list.Item, len(hosts))
+			for index, host := range hosts {
+				items[index] = &HostViewItem{Host: &host}
 			}
+			return UpdateHostsMsg{Items: items}
 		}
-		return UpdateHostsMsg{hosts: newHosts, err: err}
+		return UpdateHostsMsg{Error: err}
 	}
 }
 
@@ -50,21 +50,18 @@ func (model HostView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if msg.String() == EnterKeyMsg {
-			cmd = func() tea.Msg { return UpdateHostMsg{Host: model.network.LocalHost()} }
+		if msg.Type == tea.KeyEnter { // TODO. from settings?
+			item := model.list.SelectedItem()
+			cmd = func() tea.Msg { return UpdateHostMsg{Host: item.(*HostViewItem).Host} }
 		}
 	case UpdateHostsMsg:
-		items := make([]list.Item, len(msg.hosts))
-		for index, host := range msg.hosts {
-			items[index] = item{title: host.Name, desc: host.IP.String()}
-		}
-		cmd = model.list.SetItems(items)
+		cmd = model.list.SetItems(msg.Items)
 	case ResizeMsg:
-		frameX, frameY := model.defaultStyle.GetFrameSize()
+		frameX, frameY := model.style.GetFrameSize()
 		width := msg.Width - frameX
 		height := msg.Height - frameY
-		model.defaultStyle = model.
-			defaultStyle.
+		model.style = model.
+			style.
 			Width(width).
 			Height(height)
 
@@ -77,7 +74,7 @@ func (model HostView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (model HostView) View() string {
-	return model.defaultStyle.Render(model.list.View())
+	return model.style.Render(model.list.View())
 }
 
 func NewHostView(network *api.Network) HostView {
@@ -88,11 +85,11 @@ func NewHostView(network *api.Network) HostView {
 	lst.SetShowTitle(false)
 	lst.SetShowStatusBar(false)
 
-	defaultStyle := lipgloss.
+	style := lipgloss.
 		NewStyle().
 		Align(lipgloss.Left, lipgloss.Left).
 		BorderForeground(lipgloss.Color("ff")).
 		BorderStyle(lipgloss.NormalBorder())
 
-	return HostView{list: lst, network: network, defaultStyle: defaultStyle}
+	return HostView{list: lst, network: network, style: style}
 }

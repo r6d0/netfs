@@ -161,16 +161,20 @@ func (srv *Server) FileChildrenHandle(req transport.Request) ([]byte, any, error
 }
 
 // Creates new file or directory by api.FileInfo.
-func (srv *Server) FileCreateHandle(req transport.Request) ([]byte, any, error) { // TODO. Add validation
+func (srv *Server) FileCreateHandle(req transport.Request) ([]byte, any, error) {
 	info := &api.FileInfo{}
 	_, err := req.Body(info)
 	if err == nil {
+		srv.log.Info("FileCreateHandle() file: %v", *info)
+
 		var vl volume.Volume
 		vl, err = srv.volumes.Volume(info.FilePath)
 		if err == nil {
 			err = vl.Create(info)
 		}
 	}
+
+	srv.log.Info("FileCreateHandle() err: %v", err)
 	return nil, nil, err
 }
 

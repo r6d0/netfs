@@ -31,6 +31,7 @@ type FileView struct {
 	prev    *FileViewHistoryNode
 	host    *api.RemoteHost
 	network *api.Network
+	toCopy  *api.RemoteFile
 }
 
 func (model FileView) Init() tea.Cmd {
@@ -62,6 +63,28 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if model.prev.Prev != nil {
 				model.prev = model.prev.Prev
 				cmd = model.refreshFilesList(model.prev.File)
+			}
+		// Marks the file for copying.
+		case tea.KeyCtrlC:
+			item := model.list.SelectedItem()
+			model.toCopy = item.(*FileViewItem).File
+			// Starts the file copying.
+		case tea.KeyCtrlV:
+			if model.toCopy != nil {
+				parent := model.prev.File
+				oldFile := model.toCopy.Info
+				model.toCopy.CopyTo( // TODO. show error.
+					model.network.Transport(),
+					api.RemoteFile{
+						Host: parent.Host,
+						Info: api.FileInfo{
+							FileName: oldFile.FileName,
+							FilePath: parent.Info.FilePath + oldFile.FileName,
+							FileType: oldFile.FileType,
+							FileSize: oldFile.FileSize,
+						},
+					},
+				)
 			}
 		}
 	case UpdateHostMsg:

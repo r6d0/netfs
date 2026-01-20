@@ -165,19 +165,19 @@ func (vl *volume) Create(info *api.FileInfo) error {
 		}
 
 		if err == nil {
-			end := vl.Name() + volumeSeparator
+			end := vl.LocalPath()
 			current := filepath.ToSlash(info.FilePath)
-			current, _ = filepath.Split(current)
-			current, _ = strings.CutSuffix(current, pathSeparator)
+			cleanCurrent, _ := strings.CutSuffix(current, pathSeparator)
+			current, _ = filepath.Split(cleanCurrent)
 
 			table := vl.db.Table(VolumeFileTable)
 			records := []database.Record{fileInfoToRecord(table, current, info)}
 			for current != end {
-				next, name := filepath.Split(current)
+				cleanCurrent, _ := strings.CutSuffix(current, pathSeparator)
+
+				next, name := filepath.Split(cleanCurrent)
 				fileInfo := &api.FileInfo{FileName: name, FilePath: current, FileType: api.DIRECTORY}
 				records = append(records, fileInfoToRecord(table, next, fileInfo))
-
-				next, _ = strings.CutSuffix(next, pathSeparator)
 				current = next
 			}
 			err = table.Set(records...)
@@ -281,13 +281,15 @@ type VolumeManager interface {
 // Returns a new instance of the volume manager.
 func NewVolumeManager(db database.Database) (VolumeManager, error) {
 	// TODO. For testing only
+	osPath, _ := filepath.Abs("./testvolume/")
 	vlTable := db.Table(VolumeTable)
 	vlRecord := database.NewRecord(3)
 	vlRecord.SetRecordId(vlTable.NextId())
 	vlRecord.SetField(VolumeName, []byte("testvolume"))
-	vlRecord.SetField(VolumePath, []byte("./"))
+	vlRecord.SetField(VolumePath, []byte(osPath))
 	vlRecord.SetUint8(VolumePerm, uint8(Read|Write))
 	vlTable.Set(vlRecord)
+	os.Mkdir(osPath, os.ModeAppend)
 
 	vlRecord2 := database.NewRecord(3)
 	vlRecord2.SetRecordId(vlTable.NextId())
@@ -305,6 +307,7 @@ func NewVolumeManager(db database.Database) (VolumeManager, error) {
 	flDirRecord.SetUint8(FileType, uint8(api.DIRECTORY))
 	flDirRecord.SetField(FileParentPath, []byte("testvolume:/"))
 	flTable.Set(flDirRecord)
+	os.Mkdir(filepath.Join(osPath, "testdir"), os.ModeAppend)
 
 	flRecord := database.NewRecord(5)
 	flRecord.SetRecordId(flTable.NextId())
@@ -314,6 +317,7 @@ func NewVolumeManager(db database.Database) (VolumeManager, error) {
 	flRecord.SetUint8(FileType, uint8(api.FILE))
 	flRecord.SetField(FileParentPath, []byte("testvolume:/testdir/"))
 	flTable.Set(flRecord)
+	os.WriteFile(filepath.Join(osPath, "testdir", "testfile.txt"), []byte("TEST_DATA"), os.ModeAppend)
 
 	records, err := vlTable.Get()
 	if err == nil {

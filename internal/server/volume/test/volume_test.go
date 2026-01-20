@@ -275,27 +275,27 @@ func TestCreateDirectorySuccess(t *testing.T) {
 
 	manager, _ := volume.NewVolumeManager(db)
 	vl, _ := manager.Volume("root")
-	err := vl.Create(&api.FileInfo{FileName: "testDir3", FilePath: "root:/testDir1/testDir2/testDir3", FileType: api.DIRECTORY})
+	err := vl.Create(&api.FileInfo{FileName: "testDir3", FilePath: "root:/testDir1/testDir2/testDir3/", FileType: api.DIRECTORY})
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = os.Stat("./testDir1/testDir2/testDir3")
+	_, err = os.Stat("./testDir1/testDir2/testDir3/")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = vl.Info("root:/testDir1/testDir2/testDir3")
+	_, err = vl.Info("root:/testDir1/testDir2/testDir3/")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = vl.Info("root:/testDir1/testDir2")
+	_, err = vl.Info("root:/testDir1/testDir2/")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = vl.Info("root:/testDir1")
+	_, err = vl.Info("root:/testDir1/")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}

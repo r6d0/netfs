@@ -65,7 +65,7 @@ func TestVolumeErrVolumeNotFound(t *testing.T) {
 	}
 }
 
-func TestInfoSuccess(t *testing.T) {
+func TestFileSuccess(t *testing.T) {
 	db := database.NewDatabase(database.DatabaseConfig{})
 
 	vlOsPath, _ := filepath.Abs("./")
@@ -89,7 +89,7 @@ func TestInfoSuccess(t *testing.T) {
 	manager, _ := volume.NewVolumeManager(db)
 	vl, _ := manager.Volume("root")
 
-	info, err := vl.Info("root:/TestInfoSuccess")
+	info, err := vl.File("root:/TestInfoSuccess")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -285,17 +285,17 @@ func TestCreateDirectorySuccess(t *testing.T) {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = vl.Info("root:/testDir1/testDir2/testDir3/")
+	_, err = vl.File("root:/testDir1/testDir2/testDir3/")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = vl.Info("root:/testDir1/testDir2/")
+	_, err = vl.File("root:/testDir1/testDir2/")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = vl.Info("root:/testDir1/")
+	_, err = vl.File("root:/testDir1/")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -327,7 +327,7 @@ func TestCreateFileSuccess(t *testing.T) {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = vl.Info("root:/testDir1/testDir2/testDir3/TestCreateFileSuccess")
+	_, err = vl.File("root:/testDir1/testDir2/testDir3/TestCreateFileSuccess")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -361,7 +361,7 @@ func TestRemoveFileSuccess(t *testing.T) {
 		t.Fatal("error should be not nil, but err is nil")
 	}
 
-	_, err = vl.Info("root:/testDir1/testDir2/testDir3/TestCreateFileSuccess")
+	_, err = vl.File("root:/testDir1/testDir2/testDir3/TestCreateFileSuccess")
 	if err == nil {
 		t.Fatal("error should be not nil, but err is nil")
 	}

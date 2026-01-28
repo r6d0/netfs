@@ -9,7 +9,8 @@ import (
 )
 
 type UpdateHostMsg struct {
-	Host *api.RemoteHost
+	Host  *api.RemoteHost
+	Error error
 }
 
 type UpdateHostsMsg struct {

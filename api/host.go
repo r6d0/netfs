@@ -14,12 +14,7 @@ type RemoteHost struct {
 	IP   net.IP
 }
 
-// Returns root of the current host.
-func (host RemoteHost) Root() *RemoteFile {
-	return &RemoteFile{Host: host, Info: FileInfo{FileType: DIRECTORY, FilePath: rootDirectory}}
-}
-
-// Returns information about file by path.
+// The function returns information about a file by path.
 func (host RemoteHost) File(client transport.TransportSender, path string) (*RemoteFile, error) {
 	parameters := []string{Endpoints.FileInfo.Path, path}
 	req, err := client.NewRequest(host.IP, Endpoints.FileInfo.Name, parameters, nil, nil)
@@ -35,7 +30,26 @@ func (host RemoteHost) File(client transport.TransportSender, path string) (*Rem
 	return nil, err
 }
 
-// Returns information about task by id.
+// The function returns volumes of the host.
+func (host RemoteHost) Volumes(client transport.TransportSender) ([]RemoteVolume, error) {
+	req, err := client.NewRequest(host.IP, Endpoints.Volume, nil, nil, nil)
+	if err == nil {
+		var res transport.Response
+		if res, err = client.Send(req); err == nil {
+			volumes := []VolumeInfo{}
+			if _, err = res.Body(&volumes); err == nil {
+				result := make([]RemoteVolume, len(volumes))
+				for index, volume := range volumes {
+					result[index] = RemoteVolume{Info: volume, Host: host}
+				}
+				return result, nil
+			}
+		}
+	}
+	return nil, err
+}
+
+// The function returns information about a task by id.
 func (host RemoteHost) Task(client transport.TransportSender, taskId int) (*RemoteTask, error) {
 	params := []string{Endpoints.FileCopyStatus.Id, strconv.Itoa(taskId)}
 	req, err := client.NewRequest(host.IP, Endpoints.FileCopyStatus.Name, params, nil, nil)

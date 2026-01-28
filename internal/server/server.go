@@ -14,8 +14,6 @@ import (
 	"syscall"
 )
 
-const rootDirectory = "/"
-
 // The netfs server configuration.
 type ServerConfig struct {
 	Network  api.NetworkConfig
@@ -47,6 +45,8 @@ func (srv *Server) Start() error {
 	srv.receiver.Receive(api.Endpoints.FileCopyStart, srv.FileCopyStartHandle)
 	srv.receiver.Receive(api.Endpoints.FileCopyStatus.Name, srv.FileCopyStatusHandle)
 	srv.receiver.Receive(api.Endpoints.FileCopyStop.Name, srv.FileCopyCancelHandle)
+	srv.receiver.Receive(api.Endpoints.Volume, srv.VolumeHandle)
+	srv.receiver.Receive(api.Endpoints.VolumeChildren.Name, srv.VolumeChildrenHandle)
 
 	dbErr := srv.db.Start()
 	recErr := srv.receiver.Start()
@@ -110,24 +110,56 @@ func (srv *Server) ServerHostHandle(req transport.Request) ([]byte, any, error) 
 	return nil, srv.network.LocalHost(), nil
 }
 
+// The function handles request and returns volumes.
+func (srv *Server) VolumeHandle(req transport.Request) ([]byte, any, error) {
+	volumes := srv.volumes.Volumes()
+	if len(volumes) > 0 {
+		result := make([]api.VolumeInfo, len(volumes))
+		for index, volume := range volumes {
+			result[index] = volume.Info()
+		}
+		return nil, result, nil
+	}
+	return nil, nil, nil
+}
+
+// The function handles request and returns elements of the volume.
+func (srv *Server) VolumeChildrenHandle(req transport.Request) ([]byte, any, error) {
+	var children []api.FileInfo
+
+	name, nameErr := req.ParamRequired(api.Endpoints.VolumeChildren.Volume)
+	skip, skipErr := req.ParamInt(api.Endpoints.VolumeChildren.Skip)
+	limit, limitErr := req.ParamInt(api.Endpoints.VolumeChildren.Limit)
+
+	err := errors.Join(nameErr, skipErr, limitErr)
+	if err == nil {
+		srv.log.Info("VolumeChildren() name: %v, skip: %v, limit: %v", name, skip, limit)
+
+		var volume volume.Volume
+		if volume, err = srv.volumes.Volume(name); err == nil {
+			children, err = volume.Children(volume.Info().LocalPath, skip, limit)
+		}
+	}
+
+	if err != nil {
+		srv.log.Error("VolumeChildren() err: %v", err)
+	}
+	return nil, children, err
+}
+
 // Returns information about file.
 func (srv *Server) FileInfoHandle(req transport.Request) ([]byte, any, error) {
 	path, err := req.ParamRequired(api.Endpoints.FileInfo.Path)
 	if err == nil {
-		if path == rootDirectory { // TODO. Use volume API
-			info := api.FileInfo{FileName: "", FilePath: rootDirectory, FileType: api.DIRECTORY, FileSize: 0}
-			return nil, info, err
-		}
-
 		var volume volume.Volume
 		if volume, err = srv.volumes.Volume(path); err == nil {
-			if path == volume.LocalPath() {
-				info := api.FileInfo{FileName: volume.Name(), FilePath: volume.LocalPath(), FileType: api.DIRECTORY, FileSize: volume.Size()}
+			if path == volume.Info().LocalPath {
+				info := api.FileInfo{FileName: volume.Info().Name, FilePath: volume.Info().LocalPath, FileType: api.DIRECTORY, FileSize: volume.Size()}
 				return nil, info, err
 			}
 
 			var info *api.FileInfo
-			info, err = volume.Info(path)
+			info, err = volume.File(path)
 			return nil, info, err
 		}
 	}
@@ -144,17 +176,9 @@ func (srv *Server) FileChildrenHandle(req transport.Request) ([]byte, any, error
 
 	err := errors.Join(pathErr, skipErr, limitErr)
 	if err == nil {
-		if path == rootDirectory { // TODO. Use volume API
-			volumes := srv.volumes.Volumes()
-			children = make([]api.FileInfo, len(volumes))
-			for index, volume := range volumes {
-				children[index] = api.FileInfo{FileName: volume.Name(), FilePath: volume.LocalPath(), FileType: api.DIRECTORY, FileSize: volume.Size()}
-			}
-		} else {
-			var volume volume.Volume
-			if volume, err = srv.volumes.Volume(path); err == nil {
-				children, err = volume.Children(path, skip, limit)
-			}
+		var volume volume.Volume
+		if volume, err = srv.volumes.Volume(path); err == nil {
+			children, err = volume.Children(path, skip, limit)
 		}
 	}
 	return nil, children, err
@@ -174,7 +198,7 @@ func (srv *Server) FileCreateHandle(req transport.Request) ([]byte, any, error) 
 		}
 	}
 
-	srv.log.Info("FileCreateHandle() err: %v", err)
+	srv.log.Error("FileCreateHandle() err: %v", err)
 	return nil, nil, err
 }
 

@@ -32,6 +32,13 @@ type FileChildrenEndpoint struct {
 	Limit string
 }
 
+type VolumeChildrenEndpoint struct {
+	Name   string
+	Volume string
+	Skip   string
+	Limit  string
+}
+
 var Endpoints = struct {
 	ServerHost     string
 	ServerStop     string
@@ -43,6 +50,8 @@ var Endpoints = struct {
 	FileCopyStatus FileCopyStatusEndpoint
 	FileCopyStop   FileCopyCancelEndpoint
 	FileChildren   FileChildrenEndpoint
+	Volume         string
+	VolumeChildren VolumeChildrenEndpoint
 }{
 	ServerHost:     "/netfs/api/server/host",
 	ServerStop:     "/netfs/api/server/stop",
@@ -54,4 +63,6 @@ var Endpoints = struct {
 	FileCopyStatus: FileCopyStatusEndpoint{Name: "/netfs/api/file/copy/status", Id: "id"},
 	FileCopyStop:   FileCopyCancelEndpoint{Name: "/netfs/api/file/copy/cancel", Id: "id"},
 	FileChildren:   FileChildrenEndpoint{Name: "/netfs/api/file/children", Skip: "skip", Limit: "limit"},
+	Volume:         "/netfs/api/volume",
+	VolumeChildren: VolumeChildrenEndpoint{Name: "/netfs/api/volume/children", Volume: "volume", Skip: "skip", Limit: "limit"},
 }

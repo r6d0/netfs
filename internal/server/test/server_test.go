@@ -99,7 +99,7 @@ func TestFileCreateHandleSuccess(t *testing.T) {
 
 	path := "testvolume:/dir1/TestFileCreateHandleSuccess"
 
-	osPath, _ := filepath.Abs("./dir1")
+	osPath, _ := filepath.Abs("./testvolume/dir1")
 	defer os.RemoveAll(osPath)
 
 	network, _ := api.NewNetwork(config.Network)
@@ -151,8 +151,8 @@ func TestFileCopyStartHandleSuccess(t *testing.T) {
 	originalPath := "testvolume:/TestFileCopyStartHandleSuccess/TestFileCopyStartHandleSuccess.txt"
 	copyPath := "testvolume:/TestFileCopyStartHandleSuccessCopy/TestFileCopyStartHandleSuccessCopy.txt"
 
-	osPath, _ := filepath.Abs("./TestFileCopyStartHandleSuccess")
-	osCopyPath, _ := filepath.Abs("./TestFileCopyStartHandleSuccessCopy")
+	osPath, _ := filepath.Abs("./testvolume/TestFileCopyStartHandleSuccess")
+	osCopyPath, _ := filepath.Abs("./testvolume/TestFileCopyStartHandleSuccessCopy")
 	defer os.RemoveAll(osPath)
 	defer os.RemoveAll(osCopyPath)
 
@@ -256,8 +256,8 @@ func TestFileCopyCancelHandleSuccess(t *testing.T) {
 	originalPath := "testvolume:/TestFileCopyCancelHandleSuccess/TestFileCopyCancelHandleSuccess.txt"
 	copyPath := "testvolume:/TestFileCopyCancelHandleSuccessCopy/TestFileCopyCancelHandleSuccessCopy.txt"
 
-	osPath, _ := filepath.Abs("./TestFileCopyCancelHandleSuccess")
-	osCopyPath, _ := filepath.Abs("./TestFileCopyCancelHandleSuccessCopy")
+	osPath, _ := filepath.Abs("./testvolume/TestFileCopyCancelHandleSuccess")
+	osCopyPath, _ := filepath.Abs("./testvolume/TestFileCopyCancelHandleSuccessCopy")
 	defer os.RemoveAll(osPath)
 	defer os.RemoveAll(osCopyPath)
 
@@ -295,6 +295,37 @@ func TestFileCopyCancelHandleSuccess(t *testing.T) {
 	_, err = host.File(network.Transport(), copyFile.Info.FilePath)
 	if err == nil {
 		t.Fatal("error should be not nil, but err is nil")
+	}
+}
+
+func TestVolumeHandleSuccess(t *testing.T) {
+	beforeEach()
+	defer afterEach()
+
+	network, _ := api.NewNetwork(config.Network)
+	volumes, err := network.LocalHost().Volumes(network.Transport())
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	if len(volumes) == 0 {
+		t.Fatal("volumes should be not empty")
+	}
+}
+
+func TestVolumeChildrenHandleSuccess(t *testing.T) {
+	beforeEach()
+	defer afterEach()
+
+	network, _ := api.NewNetwork(config.Network)
+	volumes, _ := network.LocalHost().Volumes(network.Transport())
+	children, err := volumes[0].Children(network.Transport(), 0, 100)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	if len(children) == 0 {
+		t.Fatal("children should be not empty")
 	}
 }
 

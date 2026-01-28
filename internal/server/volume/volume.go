@@ -57,16 +57,12 @@ const (
 
 // Abstraction over the file system for working with files.
 type Volume interface {
-	// The volume name.
-	Name() string
-	// The volume path in OS.
-	Path() string
-	// The path for volume files and directories.
-	LocalPath() string
+	// The function returns information about volume.
+	Info() api.VolumeInfo
 	// The current volume size.
 	Size() int64
 	Perm() VolumePermition
-	Info(string) (*api.FileInfo, error)
+	File(string) (*api.FileInfo, error)
 	Children(string, int, int) ([]api.FileInfo, error)
 	Create(*api.FileInfo) error
 	Read(string, int64, int64) ([]byte, error)
@@ -77,33 +73,24 @@ type Volume interface {
 
 type volume struct {
 	id   uint64
-	name string
-	path string
+	info api.VolumeInfo
 	perm VolumePermition
 	db   database.Database
 }
 
-func (vl *volume) Name() string {
-	return vl.name
-}
-
-func (vl *volume) Path() string {
-	return vl.path
+func (vl *volume) Info() api.VolumeInfo {
+	return vl.info
 }
 
 func (vl *volume) Size() int64 { // TODO. add it
 	return 0
 }
 
-func (vl *volume) LocalPath() string {
-	return strings.Join([]string{vl.name, volumeSeparator, pathSeparator}, "")
-}
-
 func (vl *volume) Perm() VolumePermition {
 	return vl.perm
 }
 
-func (vl *volume) Info(path string) (*api.FileInfo, error) {
+func (vl *volume) File(path string) (*api.FileInfo, error) {
 	if vl.perm&Read != 0 {
 		table := vl.db.Table(VolumeFileTable)
 		records, err := table.Get(database.Eq(FilePath, []byte(path)))
@@ -165,7 +152,7 @@ func (vl *volume) Create(info *api.FileInfo) error {
 		}
 
 		if err == nil {
-			end := vl.LocalPath()
+			end := vl.info.LocalPath
 			current := filepath.ToSlash(info.FilePath)
 			cleanCurrent, _ := strings.CutSuffix(current, pathSeparator)
 			current, _ = filepath.Split(cleanCurrent)
@@ -264,10 +251,10 @@ func (vl *volume) Remove(path string) error {
 }
 
 func (vl *volume) ResolvePath(original string) string {
-	prefix := vl.Name() + volumeSeparator
+	prefix := vl.info.Name + volumeSeparator
 	if strings.HasPrefix(original, prefix) {
 		path, _ := strings.CutPrefix(original, prefix)
-		return filepath.Join(vl.Path(), path)
+		return filepath.Join(vl.info.OsPath, path)
 	}
 	return original
 }
@@ -350,7 +337,7 @@ func (mng *volumeManager) Volume(path string) (Volume, error) {
 	}
 
 	for _, volume := range mng.volumes {
-		if volume.Name() == name {
+		if volume.Info().Name == name {
 			return volume, nil
 		}
 	}
@@ -365,9 +352,12 @@ func (mng *volumeManager) Volumes() []Volume {
 
 func volumeFromRecord(db database.Database, record database.Record) (Volume, error) {
 	return &volume{
-		id:   record.GetRecordId(),
-		name: string(record.GetField(VolumeName)),
-		path: string(record.GetField(VolumePath)),
+		id: record.GetRecordId(),
+		info: api.VolumeInfo{
+			Name:      string(record.GetField(VolumeName)),
+			LocalPath: strings.Join([]string{string(record.GetField(VolumeName)), volumeSeparator, pathSeparator}, ""),
+			OsPath:    string(record.GetField(VolumePath)),
+		},
 		perm: VolumePermition(record.GetUint8(VolumePerm)),
 		db:   db,
 	}, nil

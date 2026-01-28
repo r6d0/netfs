@@ -1,40 +1,18 @@
 package api_test
 
 import (
-	"encoding/json"
-	"net/http"
+	"errors"
 	"netfs/api"
 	"netfs/api/transport"
-	"strconv"
 	"testing"
-	"time"
 )
 
 func TestFileInfoSuccess(t *testing.T) {
-	config := api.NetworkConfig{Port: 5, Protocol: transport.HTTP, Timeout: 5 * time.Second}
-	network, _ := api.NewNetwork(config)
-	local := network.LocalHost()
-
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(local)
-
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileInfo.Name, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(
-				api.FileInfo{FileName: "test_file.txt", FilePath: "./test_file.txt", FileType: api.FILE, FileSize: 1024},
-			)
-
-			w.Write(data)
-		})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
-	}()
-	time.Sleep(2 * time.Second)
+	beforeEach()
+	defer afterEach()
 
 	host, _ := network.Host(local.IP)
-	file, err := host.File(network.Transport(), "./test_file.txt")
+	file, err := host.File(network.Transport(), "testvolume:/test_dir/test_file.txt")
 	if err != nil {
 		t.Fatal("error should be nil")
 	}
@@ -47,56 +25,18 @@ func TestFileInfoSuccess(t *testing.T) {
 		t.Fatal("file name should be [test_file.txt]")
 	}
 
-	if file.Info.FilePath != "./test_file.txt" {
-		t.Fatal("file path should be [./test_file.txt]")
-	}
-}
-
-func TestFileInfoResponseError(t *testing.T) {
-	config := api.NetworkConfig{Port: 6, Protocol: transport.HTTP, Timeout: 5 * time.Second}
-	network, _ := api.NewNetwork(config)
-	local := network.LocalHost()
-
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(local)
-
-			w.Write(data)
-		})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
-	}()
-	time.Sleep(2 * time.Second)
-
-	host, _ := network.Host(local.IP)
-	_, err := host.File(network.Transport(), "./test_file.txt")
-	if err == nil {
-		t.Fatal("error should be not nil")
+	if file.Info.FilePath != "testvolume:/test_dir/test_file.txt" {
+		t.Fatal("file path should be [testvolume:/test_dir/test_file.txt]")
 	}
 }
 
 func TestTaskSuccess(t *testing.T) {
-	config := api.NetworkConfig{Port: 8, Protocol: transport.HTTP, Timeout: 5 * time.Second}
-	network, _ := api.NewNetwork(config)
-	local := network.LocalHost()
+	beforeEach()
+	defer afterEach()
 
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc(api.Endpoints.ServerHost, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(local)
-
-			w.Write(data)
-		})
-		mux.HandleFunc(api.Endpoints.FileCopyStatus.Name, func(w http.ResponseWriter, r *http.Request) {
-			data, _ := json.Marshal(
-				api.RemoteTask{Id: 1, Status: api.Completed, Host: local},
-			)
-
-			w.Write(data)
-		})
-		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
-	}()
-	time.Sleep(2 * time.Second)
+	rec.Receive(api.Endpoints.FileCopyStatus.Name, func(transport.Request) ([]byte, any, error) {
+		return nil, api.RemoteTask{Id: 1, Status: api.Completed, Host: local}, nil
+	})
 
 	host, _ := network.Host(local.IP)
 	task, err := host.Task(network.Transport(), 1)
@@ -105,5 +45,54 @@ func TestTaskSuccess(t *testing.T) {
 	}
 	if task.Status != api.Completed {
 		t.Fatalf("status should be equal [%d], but status is [%d]", api.Completed, task.Status)
+	}
+}
+
+func TestTaskResponseError(t *testing.T) {
+	beforeEach()
+	defer afterEach()
+
+	rec.Receive(api.Endpoints.FileCopyStatus.Name, func(transport.Request) ([]byte, any, error) {
+		return nil, nil, errors.New("can't submit request")
+	})
+
+	host, _ := network.Host(local.IP)
+	_, err := host.Task(network.Transport(), 1)
+	if err == nil {
+		t.Fatalf("error should be not nil, but error is nil")
+	}
+}
+
+func TestVolumesSuccess(t *testing.T) {
+	beforeEach()
+	defer afterEach()
+
+	rec.Receive(api.Endpoints.Volume, func(transport.Request) ([]byte, any, error) {
+		return nil, []api.VolumeInfo{{Name: "testvolume", OsPath: "./", LocalPath: "testvolume:/"}}, nil
+	})
+
+	host, _ := network.Host(local.IP)
+	volumes, err := host.Volumes(network.Transport())
+	if err != nil {
+		t.Fatalf("error should be nil, but error is [%s]", err)
+	}
+
+	if len(volumes) == 0 {
+		t.Fatal("volumes should be not empty")
+	}
+}
+
+func TestVolumesResponseError(t *testing.T) {
+	beforeEach()
+	defer afterEach()
+
+	rec.Receive(api.Endpoints.Volume, func(transport.Request) ([]byte, any, error) {
+		return nil, nil, errors.New("can't submit request")
+	})
+
+	host, _ := network.Host(local.IP)
+	_, err := host.Volumes(network.Transport())
+	if err == nil {
+		t.Fatalf("error should be not nil, but error is nil")
 	}
 }

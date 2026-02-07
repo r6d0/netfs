@@ -23,6 +23,8 @@ type Record interface {
 	GetUint8(RecordField) uint8
 	SetField(RecordField, []byte)
 	GetField(RecordField) []byte
+	SetString(RecordField, string)
+	GetString(RecordField) string
 }
 
 // Database record.
@@ -63,6 +65,14 @@ func (record *inMemoryRecord) SetField(index RecordField, field []byte) {
 
 func (record *inMemoryRecord) GetField(index RecordField) []byte {
 	return record.Fields[index]
+}
+
+func (record *inMemoryRecord) SetString(index RecordField, field string) {
+	record.Fields[index] = []byte(field)
+}
+
+func (record *inMemoryRecord) GetString(index RecordField) string {
+	return string(record.Fields[index])
 }
 
 func NewRecord(size int8) Record {
@@ -116,6 +126,12 @@ func Eq(field RecordField, value []byte) Option {
 	return &eqOption{Field: field, Value: value}
 }
 
+func EqUInt64(field RecordField, value uint64) Option {
+	data := make([]byte, 8)
+	binary.BigEndian.PutUint64(data, value)
+	return &eqOption{Field: field, Value: data}
+}
+
 type skipOption struct {
 	Skip int16
 }
@@ -142,12 +158,16 @@ func Limit(limit int16) Option {
 }
 
 type Table interface {
+	// The function creates new record.
+	New() Record
 	// Returns table name.
 	Name() string
 	// Returns next internal identifier.
 	NextId() uint64
 	// Returns records by options.
 	Get(...Option) ([]Record, error)
+	// The functions returns any record by options.
+	Any(...Option) (Record, error)
 	// Sets records to database.
 	Set(...Record) error
 	// Deletes records by options.
@@ -159,6 +179,10 @@ type inMemoryTable struct {
 	lastRecordId uint64
 	lock         *sync.RWMutex
 	records      []Record
+}
+
+func (tb *inMemoryTable) New() Record {
+	return &inMemoryRecord{RecordId: tb.NextId(), Fields: make([][]byte, 10)}
 }
 
 func (tb *inMemoryTable) Name() string {
@@ -204,6 +228,14 @@ func (tb *inMemoryTable) Get(options ...Option) ([]Record, error) {
 		}
 	}
 	return result, nil
+}
+
+func (tb *inMemoryTable) Any(options ...Option) (Record, error) { // TODO. Do not use Get(...).
+	records, err := tb.Get(options...)
+	if err == nil && len(records) > 0 {
+		return records[0], nil
+	}
+	return nil, err
 }
 
 // Sets record to database.

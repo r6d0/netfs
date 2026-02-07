@@ -112,15 +112,15 @@ func (srv *Server) ServerHostHandle(req transport.Request) ([]byte, any, error) 
 
 // The function handles request and returns volumes.
 func (srv *Server) VolumeHandle(req transport.Request) ([]byte, any, error) {
-	volumes := srv.volumes.Volumes()
-	if len(volumes) > 0 {
+	volumes, err := srv.volumes.Volumes()
+	if err == nil {
 		result := make([]api.VolumeInfo, len(volumes))
 		for index, volume := range volumes {
 			result[index] = volume.Info()
 		}
 		return nil, result, nil
 	}
-	return nil, nil, nil
+	return nil, nil, err
 }
 
 // The function handles request and returns elements of the volume.

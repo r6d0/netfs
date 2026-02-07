@@ -2,6 +2,7 @@ package volume_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"netfs/api"
@@ -12,40 +13,24 @@ import (
 	"testing"
 )
 
-func TestNewVolumeManagerSuccess(t *testing.T) {
-	db := database.NewDatabase(database.DatabaseConfig{})
-	table := db.Table(volume.VolumeTable)
-
-	record := database.NewRecord(3)
-	record.SetRecordId(table.NextId())
-	record.SetField(volume.VolumeName, []byte("root"))
-	record.SetField(volume.VolumePath, []byte("./"))
-	record.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
-	table.Set(record)
-
-	manager, err := volume.NewVolumeManager(db)
+func TestVolumeSuccess(t *testing.T) {
+	vlOsPath, _ := filepath.Abs("./")
+	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
+	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
+	vl, err := manager.Volume("testvolume")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	if manager == nil {
-		t.Fatal("manager should be not nil")
+	if vl == nil {
+		t.Fatal("volume should be not nil")
 	}
 }
 
-func TestVolumeSuccess(t *testing.T) {
-	db := database.NewDatabase(database.DatabaseConfig{})
-	table := db.Table(volume.VolumeTable)
-
-	record := database.NewRecord(3)
-	record.SetRecordId(table.NextId())
-	record.SetField(volume.VolumeName, []byte("root"))
-	record.SetField(volume.VolumePath, []byte("./"))
-	record.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
-	table.Set(record)
-
-	manager, _ := volume.NewVolumeManager(db)
-	vl, err := manager.Volume("root")
+func TestVolumeCreateSuccess(t *testing.T) {
+	vlOsPath, _ := filepath.Abs("./")
+	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
+	vl, err := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -60,36 +45,18 @@ func TestVolumeErrVolumeNotFound(t *testing.T) {
 
 	manager, _ := volume.NewVolumeManager(db)
 	_, err := manager.Volume("TestVolumeErrVolumeNotFound")
-	if err != volume.ErrVolumeNotFound {
+	if errors.Is(volume.ErrVolumeNotFound, err) {
 		t.Fatalf("error should be [%s], but err is [%s]", volume.ErrVolumeNotFound, err)
 	}
 }
 
 func TestFileSuccess(t *testing.T) {
-	db := database.NewDatabase(database.DatabaseConfig{})
-
 	vlOsPath, _ := filepath.Abs("./")
+	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
+	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
+	vl.Create(&api.FileInfo{FileName: "TestFileSuccess.txt", FilePath: "testvolume:/TestFileSuccess.txt", FileType: api.FILE})
 
-	vlTable := db.Table(volume.VolumeTable)
-	vlRecord := database.NewRecord(3)
-	vlRecord.SetRecordId(vlTable.NextId())
-	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
-	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
-	vlTable.Set(vlRecord)
-
-	flTable := db.Table(volume.VolumeFileTable)
-	flRecord := database.NewRecord(5)
-	flRecord.SetField(volume.FileName, []byte("TestInfoSuccess"))
-	flRecord.SetField(volume.FilePath, []byte("root:/TestInfoSuccess"))
-	flRecord.SetUint64(volume.FileSize, 100)
-	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
-	flTable.Set(flRecord)
-
-	manager, _ := volume.NewVolumeManager(db)
-	vl, _ := manager.Volume("root")
-
-	info, err := vl.File("root:/TestInfoSuccess")
+	info, err := vl.File("testvolume:/TestFileSuccess.txt")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -97,36 +64,17 @@ func TestFileSuccess(t *testing.T) {
 	if info == nil {
 		t.Fatal("info should be not nil")
 	}
+
+	vl.Remove(info.FilePath)
 }
 
 func TestChildrenSuccess(t *testing.T) {
-	fmt.Println(filepath.Split("root:/TestChildrenSuccess/mydir/myfile.txt"))
-
-	db := database.NewDatabase(database.DatabaseConfig{})
-
 	vlOsPath, _ := filepath.Abs("./")
+	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
+	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
+	vl.Create(&api.FileInfo{FileName: "TestChildrenSuccess.txt", FilePath: "testvolume:/TestChildrenSuccess.txt", FileType: api.FILE})
 
-	vlTable := db.Table(volume.VolumeTable)
-	vlRecord := database.NewRecord(3)
-	vlRecord.SetRecordId(vlTable.NextId())
-	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
-	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
-	vlTable.Set(vlRecord)
-
-	flTable := db.Table(volume.VolumeFileTable)
-	flRecord := database.NewRecord(5)
-	flRecord.SetField(volume.FileName, []byte("TestChildrenSuccess"))
-	flRecord.SetField(volume.FilePath, []byte("root:/TestChildrenSuccess"))
-	flRecord.SetUint64(volume.FileSize, 100)
-	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
-	flRecord.SetField(volume.FileParentPath, []byte("root:/"))
-	flTable.Set(flRecord)
-
-	manager, _ := volume.NewVolumeManager(db)
-	vl, _ := manager.Volume("root")
-
-	children, err := vl.Children("root:/", 0, 0)
+	children, err := vl.Children("testvolume:/", 0, 100)
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -134,39 +82,20 @@ func TestChildrenSuccess(t *testing.T) {
 	if len(children) == 0 {
 		t.Fatal("children should be not empty")
 	}
+
+	vl.Remove("testvolume:/TestChildrenSuccess.txt")
 }
 
 func TestReadSuccess(t *testing.T) {
-	generated := generate(100) // 100 bytes
+	generated := generate(100)
+
 	vlOsPath, _ := filepath.Abs("./")
-	osPath, _ := filepath.Abs("./TestReadSuccess")
-	defer os.RemoveAll(osPath)
+	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
+	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
+	vl.Create(&api.FileInfo{FileName: "TestReadSuccess.txt", FilePath: "testvolume:/TestReadSuccess.txt", FileType: api.FILE})
+	vl.Write("testvolume:/TestReadSuccess.txt", generated)
 
-	os.WriteFile(osPath, generated, os.ModeAppend)
-
-	db := database.NewDatabase(database.DatabaseConfig{})
-
-	vlTable := db.Table(volume.VolumeTable)
-	vlRecord := database.NewRecord(3)
-	vlRecord.SetRecordId(vlTable.NextId())
-	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
-	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
-	vlTable.Set(vlRecord)
-
-	flTable := db.Table(volume.VolumeFileTable)
-	flRecord := database.NewRecord(5)
-	flRecord.SetRecordId(flTable.NextId())
-	flRecord.SetField(volume.FileName, []byte("TestReadSuccess"))
-	flRecord.SetField(volume.FilePath, []byte("root:/TestReadSuccess"))
-	flRecord.SetUint64(volume.FileSize, uint64(len(generated)))
-	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
-	flTable.Set(flRecord)
-
-	manager, _ := volume.NewVolumeManager(db)
-	vl, _ := manager.Volume("root")
-
-	data, err := vl.Read("root:/TestReadSuccess", 0, int64(len(generated)))
+	data, err := vl.Read("testvolume:/TestReadSuccess.txt", 0, int64(len(generated)))
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -175,7 +104,7 @@ func TestReadSuccess(t *testing.T) {
 		t.Fatalf("the data should be equal to the generated")
 	}
 
-	data, err = vl.Read("root:/TestReadSuccess", int64(len(generated)/2), int64(len(generated)))
+	data, err = vl.Read("testvolume:/TestReadSuccess.txt", int64(len(generated)/2), int64(len(generated)))
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -183,188 +112,167 @@ func TestReadSuccess(t *testing.T) {
 	if !bytes.Equal(generated[:len(generated)/2], data) {
 		t.Fatalf("the data should be equal to the generated")
 	}
+
+	vl.Remove("testvolume:/TestReadSuccess.txt")
 }
 
 func TestWriteSuccess(t *testing.T) {
-	generated := generate(100) // 100 bytes
+	generated := generate(100)
+
 	vlOsPath, _ := filepath.Abs("./")
-	osPath, _ := filepath.Abs("./TestWriteSuccess")
-	defer os.RemoveAll(osPath)
+	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
+	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
+	vl.Create(&api.FileInfo{FileName: "TestWriteSuccess.txt", FilePath: "testvolume:/TestWriteSuccess.txt", FileType: api.FILE})
 
-	db := database.NewDatabase(database.DatabaseConfig{})
-
-	vlTable := db.Table(volume.VolumeTable)
-	vlRecord := database.NewRecord(3)
-	vlRecord.SetRecordId(vlTable.NextId())
-	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
-	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
-	vlTable.Set(vlRecord)
-
-	flTable := db.Table(volume.VolumeFileTable)
-	flRecord := database.NewRecord(5)
-	flRecord.SetRecordId(flTable.NextId())
-	flRecord.SetField(volume.FileName, []byte("TestWriteSuccess"))
-	flRecord.SetField(volume.FilePath, []byte("root:/TestWriteSuccess"))
-	flRecord.SetUint64(volume.FileSize, uint64(len(generated)))
-	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
-	flTable.Set(flRecord)
-
-	manager, _ := volume.NewVolumeManager(db)
-	vl, _ := manager.Volume("root")
-
-	err := vl.Write("root:/TestWriteSuccess", generated)
+	err := vl.Write("testvolume:/TestWriteSuccess.txt", generated)
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	file, _ := os.Open(osPath)
-	defer file.Close()
-
+	file, _ := os.Open(vl.ResolveOsPath("testvolume:/TestWriteSuccess.txt"))
 	data, _ := io.ReadAll(file)
 	if !bytes.Equal(generated, data) {
 		t.Fatalf("the data should be equal to the generated")
 	}
+
+	file.Close()
+	vl.Remove("testvolume:/TestWriteSuccess.txt")
 }
 
 func TestResolvePathSuccess(t *testing.T) {
 	vlOsPath, _ := filepath.Abs("./")
-	osPath, _ := filepath.Abs("./TestWriteSuccess")
+	osPath, _ := filepath.Abs("./TestResolvePathSuccess.txt")
+	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
+	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
+	vl.Create(&api.FileInfo{FileName: "TestResolvePathSuccess.txt", FilePath: "testvolume:/TestResolvePathSuccess.txt", FileType: api.FILE})
 
-	db := database.NewDatabase(database.DatabaseConfig{})
-
-	vlTable := db.Table(volume.VolumeTable)
-	vlRecord := database.NewRecord(3)
-	vlRecord.SetRecordId(vlTable.NextId())
-	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
-	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
-	vlTable.Set(vlRecord)
-
-	flTable := db.Table(volume.VolumeFileTable)
-	flRecord := database.NewRecord(5)
-	flRecord.SetRecordId(flTable.NextId())
-	flRecord.SetField(volume.FileName, []byte("TestWriteSuccess"))
-	flRecord.SetField(volume.FilePath, []byte("root:/TestWriteSuccess"))
-	flRecord.SetUint64(volume.FileSize, 100)
-	flRecord.SetUint8(volume.FileType, uint8(api.FILE))
-	flTable.Set(flRecord)
-
-	manager, _ := volume.NewVolumeManager(db)
-	vl, _ := manager.Volume("root")
-
-	path := vl.ResolvePath("root:/TestWriteSuccess")
-	if path != osPath {
+	path := vl.ResolveOsPath("testvolume:/TestResolvePathSuccess.txt")
+	if path != volume.NormalizePath(osPath, false) {
 		t.Fatalf("path should be [%s], but it is [%s]", osPath, path)
 	}
+
+	vl.Remove("testvolume:/TestResolvePathSuccess.txt")
 }
 
 func TestCreateDirectorySuccess(t *testing.T) {
-	defer os.RemoveAll("./testDir1")
-
 	vlOsPath, _ := filepath.Abs("./")
+	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
+	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
 
-	db := database.NewDatabase(database.DatabaseConfig{})
-	vlTable := db.Table(volume.VolumeTable)
-	vlRecord := database.NewRecord(3)
-	vlRecord.SetRecordId(vlTable.NextId())
-	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
-	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
-	vlTable.Set(vlRecord)
-
-	manager, _ := volume.NewVolumeManager(db)
-	vl, _ := manager.Volume("root")
-	err := vl.Create(&api.FileInfo{FileName: "testDir3", FilePath: "root:/testDir1/testDir2/testDir3/", FileType: api.DIRECTORY})
+	path := "testvolume:/TestCreateDirectorySuccess_1/TestCreateDirectorySuccess_2/TestCreateDirectorySuccess_3/"
+	err := vl.Create(&api.FileInfo{FileName: "TestCreateDirectorySuccess_3", FilePath: path, FileType: api.DIRECTORY})
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = os.Stat("./testDir1/testDir2/testDir3/")
+	_, err = os.Stat(vl.ResolveOsPath(path))
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = vl.File("root:/testDir1/testDir2/testDir3/")
+	_, err = vl.File(path)
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = vl.File("root:/testDir1/testDir2/")
+	_, err = vl.File("testvolume:/TestCreateDirectorySuccess_1/TestCreateDirectorySuccess_2/")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = vl.File("root:/testDir1/")
+	_, err = vl.File("testvolume:/TestCreateDirectorySuccess_1/")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
+
+	vl.Remove("testvolume:/TestCreateDirectorySuccess_1/")
 }
 
 func TestCreateFileSuccess(t *testing.T) {
-	defer os.RemoveAll("./testDir1")
-
 	vlOsPath, _ := filepath.Abs("./")
+	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
+	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
 
-	db := database.NewDatabase(database.DatabaseConfig{})
-	vlTable := db.Table(volume.VolumeTable)
-	vlRecord := database.NewRecord(3)
-	vlRecord.SetRecordId(vlTable.NextId())
-	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
-	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
-	vlTable.Set(vlRecord)
-
-	manager, _ := volume.NewVolumeManager(db)
-	vl, _ := manager.Volume("root")
-	err := vl.Create(&api.FileInfo{FileName: "TestCreateFileSuccess", FilePath: "root:/testDir1/testDir2/testDir3/TestCreateFileSuccess", FileType: api.FILE})
+	path := "testvolume:/TestCreateFileSuccess_1/TestCreateFileSuccess_2/TestCreateFileSuccess_3/TestCreateFileSuccess.txt"
+	err := vl.Create(&api.FileInfo{FileName: "TestCreateFileSuccess.txt", FilePath: path, FileType: api.FILE})
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = os.Stat("./testDir1/testDir2/testDir3/TestCreateFileSuccess")
+	_, err = os.Stat(vl.ResolveOsPath(path))
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = vl.File("root:/testDir1/testDir2/testDir3/TestCreateFileSuccess")
+	_, err = vl.File(path)
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
+
+	vl.Remove("testvolume:/TestCreateFileSuccess_1/")
 }
 
 func TestRemoveFileSuccess(t *testing.T) {
-	defer os.RemoveAll("./testDir1")
-
 	vlOsPath, _ := filepath.Abs("./")
+	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
+	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
+	vl.Create(&api.FileInfo{FileName: "TestRemoveFileSuccess.txt", FilePath: "testvolume:/TestRemoveFileSuccess.txt", FileType: api.FILE})
 
-	db := database.NewDatabase(database.DatabaseConfig{})
-	vlTable := db.Table(volume.VolumeTable)
-	vlRecord := database.NewRecord(3)
-	vlRecord.SetRecordId(vlTable.NextId())
-	vlRecord.SetField(volume.VolumeName, []byte("root"))
-	vlRecord.SetField(volume.VolumePath, []byte(vlOsPath))
-	vlRecord.SetUint8(volume.VolumePerm, uint8(volume.Read|volume.Write))
-	vlTable.Set(vlRecord)
-
-	manager, _ := volume.NewVolumeManager(db)
-	vl, _ := manager.Volume("root")
-	vl.Create(&api.FileInfo{FileName: "TestCreateFileSuccess", FilePath: "root:/testDir1/testDir2/testDir3/TestCreateFileSuccess", FileType: api.FILE})
-
-	err := vl.Remove("root:/testDir1/testDir2/testDir3/TestCreateFileSuccess")
+	err := vl.Remove("testvolume:/TestRemoveFileSuccess.txt")
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	_, err = os.Stat("./testDir1/testDir2/testDir3/TestCreateFileSuccess")
+	_, err = os.Stat(vl.ResolveOsPath("testvolume:/TestRemoveFileSuccess.txt"))
 	if err == nil {
 		t.Fatal("error should be not nil, but err is nil")
 	}
 
-	_, err = vl.File("root:/testDir1/testDir2/testDir3/TestCreateFileSuccess")
+	_, err = vl.File("testvolume:/TestRemoveFileSuccess.txt")
 	if err == nil {
 		t.Fatal("error should be not nil, but err is nil")
 	}
+}
+
+func TestNormalizePathSuccess(t *testing.T) {
+	separator := string(filepath.Separator)
+	path := "a:" + separator + "testdir" + separator + "testfile.txt"
+
+	normalized := volume.NormalizePath(path, false)
+	if normalized != "a:/testdir/testfile.txt" {
+		t.Fatalf("path should be [%s], but path is [%s]", "a:/testdir/testfile.txt", normalized)
+	}
+
+	path = "a:" + separator + "testdir" + separator + "testdir2"
+	normalized = volume.NormalizePath(path, true)
+	if normalized != "a:/testdir/testdir2/" {
+		t.Fatalf("path should be [%s], but path is [%s]", "a:/testdir/testdir2/", normalized)
+	}
+}
+
+func TestReIndexSuccess(t *testing.T) {
+	vlOsPath, _ := filepath.Abs("./testvolume")
+	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
+
+	os.Mkdir(vlOsPath, os.ModeAppend)
+	for index := range 100 {
+		os.Mkdir(filepath.Join(vlOsPath, fmt.Sprintf("TestReIndexSuccess_%d", index)), os.ModeAppend)
+	}
+	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", OsPath: vlOsPath, LocalPath: "testvolume:/"})
+
+	err := vl.ReIndex()
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
+
+	for index := range 100 {
+		_, err = vl.File(fmt.Sprintf("testvolume:/TestReIndexSuccess_%d/", index))
+		if err != nil {
+			t.Fatalf("error should be nil, but err is [%s]", err)
+		}
+	}
+
+	os.RemoveAll(vlOsPath)
 }
 
 func generate(size int) []byte {

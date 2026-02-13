@@ -26,7 +26,7 @@ type RemoteTask struct {
 
 // Cancels the current task.
 func (tsk *RemoteTask) Cancel(client transport.TransportSender) error {
-	params := []string{Endpoints.FileCopyStop.Id, strconv.Itoa(tsk.Id)}
+	params := []string{Endpoints.FileCopyStop.TaskId, strconv.Itoa(tsk.Id)}
 	req, err := client.NewRequest(tsk.Host.IP, Endpoints.FileCopyStop.Name, params, nil, nil)
 
 	if err == nil {

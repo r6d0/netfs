@@ -49,6 +49,11 @@ func (srv *Server) Start() error {
 	srv.receiver.Receive(api.Endpoints.VolumeChildren.Name, srv.VolumeChildrenHandle)
 
 	dbErr := srv.db.Start()
+
+	// TODO. Remove it, for test only
+	vl, _ := srv.volumes.Create(api.VolumeInfo{Name: "Disk D", LocalPath: "d:/", OsPath: "D:/andrey/workspace"})
+	vl.ReIndex()
+
 	recErr := srv.receiver.Start()
 	tskErr := srv.tasks.Start()
 
@@ -127,97 +132,139 @@ func (srv *Server) VolumeHandle(req transport.Request) ([]byte, any, error) {
 func (srv *Server) VolumeChildrenHandle(req transport.Request) ([]byte, any, error) {
 	var children []api.FileInfo
 
-	name, nameErr := req.ParamRequired(api.Endpoints.VolumeChildren.Volume)
+	volumeId, volumeIdErr := req.ParamUInt64(api.Endpoints.VolumeChildren.VolumeId)
 	skip, skipErr := req.ParamInt(api.Endpoints.VolumeChildren.Skip)
 	limit, limitErr := req.ParamInt(api.Endpoints.VolumeChildren.Limit)
 
-	err := errors.Join(nameErr, skipErr, limitErr)
+	err := errors.Join(volumeIdErr, skipErr, limitErr)
 	if err == nil {
-		srv.log.Info("VolumeChildren() name: %v, skip: %v, limit: %v", name, skip, limit)
+		srv.log.Info("VolumeChildren() volumeId: %v, skip: %v, limit: %v", volumeId, skip, limit)
 
 		var volume volume.Volume
-		if volume, err = srv.volumes.Volume(name); err == nil {
-			children, err = volume.Children(volume.Info().LocalPath, skip, limit)
+		if volume, err = srv.volumes.Volume(volumeId); err == nil {
+			children, err = volume.Children(volumeId, skip, limit)
 		}
 	}
 
 	if err != nil {
 		srv.log.Error("VolumeChildren() err: %v", err)
 	}
+	srv.log.Info("VolumeChildren() children: %v", len(children))
 	return nil, children, err
 }
 
-// Returns information about file.
+// The function returns information about the file.
 func (srv *Server) FileInfoHandle(req transport.Request) ([]byte, any, error) {
-	path, err := req.ParamRequired(api.Endpoints.FileInfo.Path)
-	if err == nil {
-		var volume volume.Volume
-		if volume, err = srv.volumes.Volume(path); err == nil {
-			if path == volume.Info().LocalPath {
-				info := api.FileInfo{FileName: volume.Info().Name, FilePath: volume.Info().LocalPath, FileType: api.DIRECTORY, FileSize: volume.Size()}
-				return nil, info, err
-			}
+	var info *api.FileInfo
 
-			var info *api.FileInfo
-			info, err = volume.File(path)
-			return nil, info, err
+	volumeId, volumeIdErr := req.ParamUInt64(api.Endpoints.FileInfo.VolumeId)
+	fileId, fileIdErr := req.ParamUInt64(api.Endpoints.FileInfo.FileId)
+
+	err := errors.Join(volumeIdErr, fileIdErr)
+	if err == nil {
+		srv.log.Info("FileInfoHandle() volumeId: %v, fileId: %v", volumeId, fileId)
+
+		var volume volume.Volume
+		if volume, err = srv.volumes.Volume(volumeId); err == nil {
+			info, err = volume.File(fileId)
 		}
 	}
-	return nil, nil, err
+
+	if err != nil {
+		srv.log.Error("FileInfoHandle() err: %v", err)
+	}
+	srv.log.Info("FileInfoHandle() info: %v", *info)
+	return nil, info, err
 }
 
-// Returns children of the directory.
+// The function returns children of the directory.
 func (srv *Server) FileChildrenHandle(req transport.Request) ([]byte, any, error) {
 	var children []api.FileInfo
 
-	path, pathErr := req.ParamRequired(api.Endpoints.FileChildren.Path)
+	volumeId, volumeIdErr := req.ParamUInt64(api.Endpoints.FileChildren.VolumeId)
+	fileId, fileIdErr := req.ParamUInt64(api.Endpoints.FileChildren.FileId)
 	skip, skipErr := req.ParamInt(api.Endpoints.FileChildren.Skip)
 	limit, limitErr := req.ParamInt(api.Endpoints.FileChildren.Limit)
 
-	err := errors.Join(pathErr, skipErr, limitErr)
+	err := errors.Join(volumeIdErr, fileIdErr, skipErr, limitErr)
 	if err == nil {
+		srv.log.Info("FileChildrenHandle() volumeId: %v, fileId: %v, skip: %v, limit: %v", volumeId, fileId, skip, limit)
+
 		var volume volume.Volume
-		if volume, err = srv.volumes.Volume(path); err == nil {
-			children, err = volume.Children(path, skip, limit)
+		if volume, err = srv.volumes.Volume(volumeId); err == nil {
+			children, err = volume.Children(fileId, skip, limit)
 		}
 	}
+
+	if err != nil {
+		srv.log.Error("FileChildrenHandle() err: %v", err)
+	}
+	srv.log.Info("FileChildrenHandle() children: %v", len(children))
 	return nil, children, err
 }
 
-// Creates new file or directory by api.FileInfo.
+// The function creates a new file or directory by api.FileInfo.
 func (srv *Server) FileCreateHandle(req transport.Request) ([]byte, any, error) {
+	var created *api.FileInfo
+
 	info := &api.FileInfo{}
 	_, err := req.Body(info)
 	if err == nil {
 		srv.log.Info("FileCreateHandle() file: %v", *info)
 
 		var vl volume.Volume
-		vl, err = srv.volumes.Volume(info.FilePath)
+		vl, err = srv.volumes.Volume(info.VolumeId)
 		if err == nil {
-			err = vl.Create(info)
+			created, err = vl.Create(info)
 		}
 	}
 
-	srv.log.Error("FileCreateHandle() err: %v", err)
-	return nil, nil, err
+	if err != nil {
+		srv.log.Error("FileCreateHandle() err: %v", err)
+	} else {
+		srv.log.Info("FileCreateHandle() created: %v", *created)
+	}
+	return nil, created, err
 }
 
-// Writes data to file.
-func (srv *Server) FileWriteHandle(req transport.Request) ([]byte, any, error) { // TODO. Add validation
-	path := req.Param(api.Endpoints.FileWrite.Path)
-	volume, err := srv.volumes.Volume(path)
+// The function writes data to a file.
+func (srv *Server) FileWriteHandle(req transport.Request) ([]byte, any, error) {
+	volumeId, volumeIdErr := req.ParamUInt64(api.Endpoints.FileInfo.VolumeId)
+	fileId, fileIdErr := req.ParamUInt64(api.Endpoints.FileInfo.FileId)
+
+	err := errors.Join(volumeIdErr, fileIdErr)
 	if err == nil {
-		err = volume.Write(path, req.RawBody())
+		srv.log.Info("FileWriteHandle() volumeId: %v, fileId: %v", volumeId, fileId)
+
+		var vl volume.Volume
+		if vl, err = srv.volumes.Volume(volumeId); err == nil {
+			err = vl.Write(fileId, req.RawBody())
+		}
+	}
+
+	if err != nil {
+		srv.log.Error("FileWriteHandle() err: %v", err)
 	}
 	return nil, nil, err
 }
 
-// Removes file or directory.
-func (srv *Server) FileRemoveHandle(req transport.Request) ([]byte, any, error) { // TODO. Add validation
-	path := req.Param(api.Endpoints.FileRemove.Path)
-	volume, err := srv.volumes.Volume(path)
+// The function removes the file.
+func (srv *Server) FileRemoveHandle(req transport.Request) ([]byte, any, error) {
+	volumeId, volumeIdErr := req.ParamUInt64(api.Endpoints.FileInfo.VolumeId)
+	fileId, fileIdErr := req.ParamUInt64(api.Endpoints.FileInfo.FileId)
+
+	err := errors.Join(volumeIdErr, fileIdErr)
 	if err == nil {
-		err = volume.Remove(path)
+		srv.log.Info("FileRemoveHandle() volumeId: %v, fileId: %v", volumeId, fileId)
+
+		var vl volume.Volume
+		if vl, err = srv.volumes.Volume(volumeId); err == nil {
+			err = vl.Remove(fileId)
+		}
+	}
+
+	if err != nil {
+		srv.log.Error("FileRemoveHandle() err: %v", err)
 	}
 	return nil, nil, err
 }
@@ -241,7 +288,7 @@ func (srv *Server) FileCopyStartHandle(req transport.Request) ([]byte, any, erro
 
 // Returns status of the task.
 func (srv *Server) FileCopyStatusHandle(req transport.Request) ([]byte, any, error) { // TODO. Add validation
-	param := req.Param(api.Endpoints.FileCopyStatus.Id)
+	param := req.Param(api.Endpoints.FileCopyStatus.TaskId)
 	id, err := strconv.Atoi(param)
 	if err == nil {
 		var task task.Task
@@ -254,7 +301,7 @@ func (srv *Server) FileCopyStatusHandle(req transport.Request) ([]byte, any, err
 
 // Stops the task.
 func (srv *Server) FileCopyCancelHandle(req transport.Request) ([]byte, any, error) { // TODO. Add validation
-	param := req.Param(api.Endpoints.FileCopyStop.Id)
+	param := req.Param(api.Endpoints.FileCopyStop.TaskId)
 	id, err := strconv.Atoi(param)
 	if err == nil {
 		err = srv.tasks.CancelTask(id)

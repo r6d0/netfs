@@ -7,29 +7,6 @@ import (
 	"testing"
 )
 
-func TestFileInfoSuccess(t *testing.T) {
-	beforeEach()
-	defer afterEach()
-
-	host, _ := network.Host(local.IP)
-	file, err := host.File(network.Transport(), "testvolume:/test_dir/test_file.txt")
-	if err != nil {
-		t.Fatal("error should be nil")
-	}
-
-	if file.Info.FileType != api.FILE {
-		t.Fatal("element should be a file")
-	}
-
-	if file.Info.FileName != "test_file.txt" {
-		t.Fatal("file name should be [test_file.txt]")
-	}
-
-	if file.Info.FilePath != "testvolume:/test_dir/test_file.txt" {
-		t.Fatal("file path should be [testvolume:/test_dir/test_file.txt]")
-	}
-}
-
 func TestTaskSuccess(t *testing.T) {
 	beforeEach()
 	defer afterEach()

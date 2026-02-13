@@ -14,22 +14,6 @@ type RemoteHost struct {
 	IP   net.IP
 }
 
-// The function returns information about a file by path.
-func (host RemoteHost) File(client transport.TransportSender, path string) (*RemoteFile, error) {
-	parameters := []string{Endpoints.FileInfo.Path, path}
-	req, err := client.NewRequest(host.IP, Endpoints.FileInfo.Name, parameters, nil, nil)
-	if err == nil {
-		var res transport.Response
-		if res, err = client.Send(req); err == nil {
-			info := &FileInfo{}
-			if _, err = res.Body(info); err == nil {
-				return &RemoteFile{Info: *info, Host: host}, nil
-			}
-		}
-	}
-	return nil, err
-}
-
 // The function returns volumes of the host.
 func (host RemoteHost) Volumes(client transport.TransportSender) ([]RemoteVolume, error) {
 	req, err := client.NewRequest(host.IP, Endpoints.Volume, nil, nil, nil)
@@ -51,7 +35,7 @@ func (host RemoteHost) Volumes(client transport.TransportSender) ([]RemoteVolume
 
 // The function returns information about a task by id.
 func (host RemoteHost) Task(client transport.TransportSender, taskId int) (*RemoteTask, error) {
-	params := []string{Endpoints.FileCopyStatus.Id, strconv.Itoa(taskId)}
+	params := []string{Endpoints.FileCopyStatus.TaskId, strconv.Itoa(taskId)}
 	req, err := client.NewRequest(host.IP, Endpoints.FileCopyStatus.Name, params, nil, nil)
 
 	if err == nil {

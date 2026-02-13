@@ -29,6 +29,7 @@ type Request interface {
 	Param(string) string
 	ParamRequired(string) (string, error)
 	ParamInt(string) (int, error)
+	ParamUInt64(string) (uint64, error)
 	Params() []string
 	RawBody() []byte
 	Body(any) (any, error)

@@ -1,42 +1,46 @@
 package api
 
 type FileInfoEndpoint struct {
-	Name string
-	Path string
+	Name     string
+	VolumeId string
+	FileId   string
 }
 
 type FileWriteEndpoint struct {
-	Name string
-	Path string
+	Name     string
+	VolumeId string
+	FileId   string
 }
 
 type FileRemoveEndpoint struct {
-	Name string
-	Path string
+	Name     string
+	VolumeId string
+	FileId   string
 }
 
 type FileCopyStatusEndpoint struct {
-	Name string
-	Id   string
+	Name   string
+	TaskId string
 }
 
 type FileCopyCancelEndpoint struct {
-	Name string
-	Id   string
+	Name   string
+	TaskId string
 }
 
 type FileChildrenEndpoint struct {
-	Name  string
-	Path  string
-	Skip  string
-	Limit string
+	Name     string
+	VolumeId string
+	FileId   string
+	Skip     string
+	Limit    string
 }
 
 type VolumeChildrenEndpoint struct {
-	Name   string
-	Volume string
-	Skip   string
-	Limit  string
+	Name     string
+	VolumeId string
+	Skip     string
+	Limit    string
 }
 
 var Endpoints = struct {
@@ -55,14 +59,14 @@ var Endpoints = struct {
 }{
 	ServerHost:     "/netfs/api/server/host",
 	ServerStop:     "/netfs/api/server/stop",
-	FileInfo:       FileInfoEndpoint{Name: "/netfs/api/file/info", Path: "path"},
+	FileInfo:       FileInfoEndpoint{Name: "/netfs/api/file/info", VolumeId: "volumeId", FileId: "fileId"},
 	FileCreate:     "/netfs/api/file/create",
-	FileWrite:      FileWriteEndpoint{Name: "/netfs/api/file/write", Path: "path"},
-	FileRemove:     FileRemoveEndpoint{Name: "/netfs/api/file/remove", Path: "path"},
+	FileWrite:      FileWriteEndpoint{Name: "/netfs/api/file/write", VolumeId: "volumeId", FileId: "fileId"},
+	FileRemove:     FileRemoveEndpoint{Name: "/netfs/api/file/remove", VolumeId: "volumeId", FileId: "fileId"},
 	FileCopyStart:  "/netfs/api/file/copy/start",
-	FileCopyStatus: FileCopyStatusEndpoint{Name: "/netfs/api/file/copy/status", Id: "id"},
-	FileCopyStop:   FileCopyCancelEndpoint{Name: "/netfs/api/file/copy/cancel", Id: "id"},
-	FileChildren:   FileChildrenEndpoint{Name: "/netfs/api/file/children", Skip: "skip", Limit: "limit"},
+	FileCopyStatus: FileCopyStatusEndpoint{Name: "/netfs/api/file/copy/status", TaskId: "id"},
+	FileCopyStop:   FileCopyCancelEndpoint{Name: "/netfs/api/file/copy/cancel", TaskId: "id"},
+	FileChildren:   FileChildrenEndpoint{Name: "/netfs/api/file/children", VolumeId: "volumeId", FileId: "fileId", Skip: "skip", Limit: "limit"},
 	Volume:         "/netfs/api/volume",
-	VolumeChildren: VolumeChildrenEndpoint{Name: "/netfs/api/volume/children", Volume: "volume", Skip: "skip", Limit: "limit"},
+	VolumeChildren: VolumeChildrenEndpoint{Name: "/netfs/api/volume/children", VolumeId: "volumeId", Skip: "skip", Limit: "limit"},
 }

@@ -15,7 +15,7 @@ func TestVolumeChildrenSuccess(t *testing.T) {
 		return nil, []api.VolumeInfo{{Name: "testvolume", OsPath: "./", LocalPath: "testvolume:/"}}, nil
 	})
 	rec.Receive(api.Endpoints.VolumeChildren.Name, func(req transport.Request) ([]byte, any, error) {
-		if req.Param(api.Endpoints.VolumeChildren.Volume) != "testvolume" {
+		if req.Param(api.Endpoints.VolumeChildren.VolumeId) != "testvolume" {
 			return nil, nil, errors.New("can't submit request")
 		}
 
@@ -27,7 +27,7 @@ func TestVolumeChildrenSuccess(t *testing.T) {
 			return nil, nil, errors.New("can't submit request")
 		}
 
-		return nil, []api.FileInfo{{FileName: "test_file.txt", FilePath: "testvolume:/test_dir/test_file.txt", FileType: api.FILE}}, nil
+		return nil, []api.FileInfo{{Name: "test_file.txt", Path: "testvolume:/test_dir/test_file.txt", Type: api.FILE}}, nil
 	})
 
 	host, _ := network.Host(local.IP)

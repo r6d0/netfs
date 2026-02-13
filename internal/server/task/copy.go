@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"netfs/api"
 	"netfs/internal/server/database"
-	"netfs/internal/server/volume"
 )
 
 type TaskCopyConfig struct {
@@ -49,36 +48,37 @@ func (task *CopyTask) BeforeExecute(TaskExecuteContext) error {
 }
 
 func (task *CopyTask) Execute(ctx TaskExecuteContext) error {
-	config := ctx.Config.Copy
-	source := task.Payload.Source
-	target := task.Payload.Target
+	// config := ctx.Config.Copy
+	// source := task.Payload.Source
+	// target := task.Payload.Target
 
-	err := target.Create(ctx.Transport)
-	if err == nil {
-		size := config.BufferSize
-		path := source.Info.FilePath
+	// err := target.Create(ctx.Transport)
+	// if err == nil {
+	// 	size := config.BufferSize
+	// 	path := source.Info.FilePath
 
-		var vl volume.Volume
-		if vl, err = ctx.Volumes.Volume(path); err == nil {
-			var buffer []byte
-			if buffer, err = vl.Read(path, task.Payload.Offset, size); err == nil {
-				if err = target.Write(ctx.Transport, buffer); err == nil {
-					task.Status = api.Waiting
-					task.Payload.Offset += int64(len(buffer))
-				}
-			}
+	// 	var vl volume.Volume
+	// 	if vl, err = ctx.Volumes.Volume(path); err == nil {
+	// 		var buffer []byte
+	// 		if buffer, err = vl.Read(path, task.Payload.Offset, size); err == nil {
+	// 			if err = target.Write(ctx.Transport, buffer); err == nil {
+	// 				task.Status = api.Waiting
+	// 				task.Payload.Offset += int64(len(buffer))
+	// 			}
+	// 		}
 
-			if len(buffer) < int(size) {
-				task.Status = api.Completed
-			}
-		}
-	}
+	// 		if len(buffer) < int(size) {
+	// 			task.Status = api.Completed
+	// 		}
+	// 	}
+	// }
 
-	if err != nil {
-		task.Status = api.Failed
-		task.Payload.Error = err.Error()
-	}
-	return err
+	// if err != nil {
+	// 	task.Status = api.Failed
+	// 	task.Payload.Error = err.Error()
+	// }
+	// return err
+	return nil
 }
 
 func (*CopyTask) AfterExecute(TaskExecuteContext) error {

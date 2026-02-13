@@ -3,9 +3,12 @@ package api_test
 import (
 	"netfs/api"
 	"netfs/api/transport"
-	"path/filepath"
 	"time"
 )
+
+const testVolumeId = 100
+const testFileId = 100
+const testFileName = "test_file.txt"
 
 // Do not use with t.Parallel(...)
 
@@ -23,9 +26,9 @@ func beforeEach() {
 		return nil, local, nil
 	})
 	rec.Receive(api.Endpoints.FileInfo.Name, func(req transport.Request) ([]byte, any, error) {
-		path, err := req.ParamRequired(api.Endpoints.FileInfo.Path)
-		_, name := filepath.Split(path)
-		return nil, api.FileInfo{FileName: name, FilePath: path, FileType: api.FILE, FileSize: 1024}, err
+		volumeId, err := req.ParamUInt64(api.Endpoints.FileInfo.VolumeId)
+		fileId, err := req.ParamUInt64(api.Endpoints.FileInfo.FileId)
+		return nil, api.FileInfo{Type: api.FILE, VolumeId: volumeId, Id: fileId}, err
 	})
 	rec.Start()
 }

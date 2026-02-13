@@ -172,6 +172,8 @@ type Table interface {
 	Set(...Record) error
 	// Deletes records by options.
 	Del(...Option) error
+	// The function performs an operation in a transaction.
+	Txn(func(Table) error) error
 }
 
 type inMemoryTable struct {
@@ -256,6 +258,10 @@ func (tb *inMemoryTable) Set(records ...Record) error {
 	return nil
 }
 
+func (tb *inMemoryTable) Txn(operation func(Table) error) error {
+	return operation(tb)
+}
+
 // Deletes records by options.
 func (tb *inMemoryTable) Del(options ...Option) error {
 	tb.lock.Lock()
@@ -266,7 +272,7 @@ func (tb *inMemoryTable) Del(options ...Option) error {
 		option.apply(ctx)
 	}
 
-	result := make([]Record, len(tb.records))
+	result := []Record{}
 	for _, record := range tb.records {
 		match := true
 		for _, cond := range ctx.Conditions {

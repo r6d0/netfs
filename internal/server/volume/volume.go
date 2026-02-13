@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/fs"
 	"netfs/api"
+	"netfs/internal/collection"
 	"netfs/internal/server/database"
 	"os"
 	"path/filepath"
@@ -33,12 +34,15 @@ const (
 	FilePath
 	FileSize
 	FileType
-	FileParentPath
+	FileParentId
 	FileVolumeId
 )
 
 // If the file is not found.
 var ErrFileNotFound = errors.New("file is not found")
+
+// If file has incorrect path.
+var ErrFileHasIncorrectPath = errors.New("file has incorrect path")
 
 // If the volume is not found.
 var ErrVolumeNotFound = errors.New("volume is not found")
@@ -49,14 +53,19 @@ type Volume interface {
 	Info() api.VolumeInfo
 	// The function scans all volume elements.
 	ReIndex() error
-	// The current volume size.
 	Size() int64
-	File(string) (*api.FileInfo, error)
-	Children(string, int, int) ([]api.FileInfo, error)
-	Create(*api.FileInfo) error
-	Read(string, int64, int64) ([]byte, error)
-	Write(string, []byte) error
-	Remove(string) error
+	// The function returns information about the file.
+	File(uint64) (*api.FileInfo, error)
+	// The function returns children of the directory.
+	Children(uint64, int, int) ([]api.FileInfo, error)
+	// The function creates a new file or directory.
+	Create(*api.FileInfo) (*api.FileInfo, error)
+	// The function reads data from a file.
+	Read(uint64, int64, int64) ([]byte, error)
+	// The function writes data to a file.
+	Write(uint64, []byte) error
+	// The function removes the file.
+	Remove(uint64) error
 	// The function returns the path in OS for the local path.
 	ResolveOsPath(string) string
 	// The function returns the local path for the path in OS.
@@ -64,7 +73,6 @@ type Volume interface {
 }
 
 type volume struct {
-	id   uint64
 	info api.VolumeInfo
 	db   database.Database
 }
@@ -75,32 +83,39 @@ func (vl *volume) Info() api.VolumeInfo {
 
 func (vl *volume) ReIndex() error {
 	table := vl.db.Table(VolumeFileTable)
-	err := table.Del(database.EqUInt64(FileVolumeId, vl.id))
+	err := table.Del(database.EqUInt64(FileVolumeId, vl.info.Id))
 
 	if err == nil {
+		current := &api.FileInfo{Path: vl.info.LocalPath}
+		stack := collection.Stack[*api.FileInfo]{}
+
 		err = filepath.WalkDir(vl.info.OsPath, func(path string, dir fs.DirEntry, err error) error {
+			path = NormalizePath(path, dir.IsDir())
 			if path != vl.info.OsPath {
-				var info fs.FileInfo
-				if info, err = dir.Info(); err == nil {
-					isDir := info.IsDir()
-					parent, name := filepath.Split(path)
-					normalizedPath := NormalizePath(path, isDir)
-					normalizedParentPath := NormalizePath(parent, true)
+				local := vl.ResolveLocalPath(path)
+				info := &api.FileInfo{Id: vl.info.Id, Path: local, Name: dir.Name(), VolumeId: vl.info.Id}
 
-					record := table.New()
-					record.SetString(FileName, name)
-					record.SetString(FilePath, vl.ResolveLocalPath(normalizedPath))
-					record.SetString(FileParentPath, vl.ResolveLocalPath(normalizedParentPath))
-					record.SetUint64(FileSize, uint64(info.Size()))
-					record.SetUint64(FileVolumeId, vl.id)
-					if isDir {
-						record.SetUint8(FileType, uint8(api.DIRECTORY))
-					} else {
-						record.SetUint8(FileType, uint8(api.FILE))
-					}
-
-					err = table.Set(record)
+				for !strings.HasPrefix(local, current.Path) {
+					current = stack.Pop()
 				}
+				info.ParentId = current.Id
+
+				if dir.IsDir() {
+					info.Type = api.DIRECTORY
+
+					stack.Push(current)
+					current = info
+				} else {
+					info.Type = api.FILE
+
+					var fsInfo fs.FileInfo
+					if fsInfo, err = dir.Info(); err == nil {
+						info.Size = uint64(fsInfo.Size()) // TODO. Use uint64(fsInfo.Size())
+					}
+				}
+
+				_, err := vl.Create(info)
+				return err
 			}
 			return err
 		})
@@ -112,93 +127,116 @@ func (vl *volume) Size() int64 { // TODO. add it
 	return 0
 }
 
-func (vl *volume) File(path string) (*api.FileInfo, error) {
+func (vl *volume) File(fileId uint64) (*api.FileInfo, error) {
 	table := vl.db.Table(VolumeFileTable)
-	record, err := table.Any(database.Eq(FilePath, []byte(path)))
+	record, err := table.Any(database.Id(fileId))
 	if record != nil && err == nil {
-		return fileInfoFromRecord(record)
+		return &api.FileInfo{
+			Id:       fileId,
+			Name:     record.GetString(FileName),
+			Path:     record.GetString(FilePath),
+			Type:     api.FileType(record.GetUint8(FileType)),
+			Size:     record.GetUint64(FileSize),
+			ParentId: record.GetUint64(FileParentId),
+			VolumeId: vl.info.Id,
+		}, nil
 	}
 	return nil, errors.Join(ErrFileNotFound, err)
 }
 
-func (vl *volume) Children(path string, skip int, limit int) ([]api.FileInfo, error) {
+func (vl *volume) Children(fileId uint64, skip int, limit int) ([]api.FileInfo, error) {
 	table := vl.db.Table(VolumeFileTable)
 	records, err := table.Get(
-		database.Eq(FileParentPath, []byte(path)),
+		database.EqUInt64(FileParentId, fileId),
 		database.Skip(int16(skip)),
 		database.Limit(int16(limit)),
 	)
 
 	if err == nil {
 		result := make([]api.FileInfo, len(records))
-		for index, record := range records {
-			var info *api.FileInfo
-			if info, err = fileInfoFromRecord(record); err == nil {
-				result[index] = *info
-			} else {
-				break
+		for idx, record := range records {
+			result[idx] = api.FileInfo{
+				Id:       record.GetRecordId(),
+				Name:     record.GetString(FileName),
+				Path:     record.GetString(FilePath),
+				Type:     api.FileType(record.GetUint8(FileType)),
+				Size:     record.GetUint64(FileSize),
+				ParentId: record.GetUint64(FileParentId),
+				VolumeId: vl.info.Id,
 			}
 		}
 
-		if err == nil {
-			return result, nil
-		}
+		return result, nil
 	}
 	return nil, err
 }
 
-func (vl *volume) Create(info *api.FileInfo) error {
+func (vl *volume) Create(info *api.FileInfo) (*api.FileInfo, error) {
 	var err error
 
-	normalized := NormalizePath(info.FilePath, info.FileType == api.DIRECTORY)
-	path := vl.ResolveOsPath(normalized)
-	if info.FileType == api.DIRECTORY {
-		err = os.MkdirAll(path, 0755) // TODO. 0755?
-	} else {
-		dir, _ := filepath.Split(path)
-		if err = os.MkdirAll(dir, 0755); err == nil { // TODO. 0755?
-			var file *os.File
-			if file, err = os.Create(path); err == nil {
-				file.Close()
+	table := vl.db.Table(VolumeFileTable)
+	path := info.Path
+	if path == "" {
+		if info.ParentId > 0 {
+			var parent database.Record
+			if parent, err = table.Any(database.Id(info.ParentId)); err == nil {
+				if parent != nil {
+					path = NormalizePath(parent.GetString(FilePath)+info.Name, info.Type == api.DIRECTORY)
+				} else {
+					err = ErrFileNotFound
+				}
 			}
+		} else {
+			path = NormalizePath(vl.info.LocalPath+info.Name, info.Type == api.DIRECTORY)
 		}
 	}
 
 	if err == nil {
-		end := vl.info.LocalPath
-		current := filepath.ToSlash(info.FilePath)
-		cleanCurrent, _ := strings.CutSuffix(current, pathSeparator)
-		current, _ = filepath.Split(cleanCurrent)
+		err = table.Txn(func(table database.Table) error {
+			record := table.New()
+			record.SetString(FileName, info.Name)
+			record.SetString(FilePath, path)
+			record.SetUint64(FileSize, info.Size)
+			record.SetUint8(FileType, uint8(info.Type))
+			record.SetUint64(FileParentId, info.ParentId)
+			record.SetUint64(FileVolumeId, info.VolumeId)
 
-		table := vl.db.Table(VolumeFileTable)
-		records := []database.Record{fileInfoToRecord(table, current, vl.id, info)}
-		for current != end {
-			cleanCurrent, _ := strings.CutSuffix(current, pathSeparator)
+			txnErr := table.Set(record)
+			if txnErr == nil {
+				if info.Type == api.DIRECTORY {
+					txnErr = os.Mkdir(vl.ResolveOsPath(path), 0755) // TODO. 0755?
+				} else {
+					var file *os.File
+					if file, txnErr = os.Create(vl.ResolveOsPath(path)); txnErr == nil {
+						file.Close()
+					}
+				}
 
-			next, name := filepath.Split(cleanCurrent)
-			fileInfo := &api.FileInfo{FileName: name, FilePath: current, FileType: api.DIRECTORY}
-			records = append(records, fileInfoToRecord(table, next, vl.id, fileInfo))
-			current = next
-		}
-		err = table.Set(records...)
+				if txnErr == nil || errors.Is(txnErr, fs.ErrExist) {
+					info.Id = record.GetRecordId()
+					info.Path = path
+					return nil
+				}
+			}
+			return txnErr
+		})
 	}
-	return err
+	return info, err
 }
 
-func (vl *volume) Read(path string, offset int64, size int64) ([]byte, error) {
+func (vl *volume) Read(fileId uint64, offset int64, size int64) ([]byte, error) {
 	table := vl.db.Table(VolumeFileTable)
-	records, err := table.Get(database.Eq(FilePath, []byte(path)))
+	record, err := table.Any(database.Id(fileId))
 	if err == nil {
-		if len(records) == 1 {
-			fileSize := records[0].GetUint64(FileSize)
-			fileOsPath := vl.ResolveOsPath(string(records[0].GetField(FilePath)))
+		if record != nil {
+			osPath := vl.ResolveOsPath(record.GetString(FilePath))
 
 			var file *os.File
-			if file, err = os.Open(fileOsPath); err == nil {
+			if file, err = os.Open(osPath); err == nil {
 				defer file.Close() // TODO. Add file to cache
 
 				read := 0
-				data := make([]byte, min(size, int64(fileSize)))
+				data := make([]byte, min(size, int64(record.GetUint64(FileSize)))) // TODO. record.GetInt64(FileSize)
 				read, err = file.ReadAt(data, offset)
 				if err == nil || errors.Is(err, io.EOF) {
 					return data[:read], nil
@@ -211,24 +249,23 @@ func (vl *volume) Read(path string, offset int64, size int64) ([]byte, error) {
 	return nil, err
 }
 
-func (vl *volume) Write(path string, data []byte) error {
+func (vl *volume) Write(fileId uint64, data []byte) error {
 	table := vl.db.Table(VolumeFileTable)
-	records, err := table.Get(database.Eq(FilePath, []byte(path)))
+	record, err := table.Any(database.Id(fileId))
 	if err == nil {
-		if len(records) == 1 {
-			record := records[0]
-			fileOsPath := vl.ResolveOsPath(string(record.GetField(FilePath)))
+		if record != nil {
+			fileOsPath := vl.ResolveOsPath(record.GetString(FilePath))
 
 			var file *os.File
 			if file, err = os.OpenFile(fileOsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-				defer file.Close() // TODO. Add file to cache
+				defer file.Close() // TODO. Add file to cache?
 
 				_, err = file.Write(data)
 				if err == nil {
 					size := record.GetUint64(FileSize) + uint64(len(data))
 					record.SetUint64(FileSize, size)
 
-					err = table.Set(records...)
+					err = table.Set(record)
 				}
 			}
 		} else {
@@ -238,15 +275,21 @@ func (vl *volume) Write(path string, data []byte) error {
 	return err
 }
 
-func (vl *volume) Remove(path string) error {
+func (vl *volume) Remove(fileId uint64) error {
 	table := vl.db.Table(VolumeFileTable)
-	records, err := table.Get(database.Eq(FilePath, []byte(path))) // TODO. remove children of directory
+	record, err := table.Any(database.Id(fileId))
 	if err == nil {
-		if len(records) == 1 {
-			if err = table.Del(database.Id(records[0].GetRecordId())); err == nil {
-				fileOsPath := vl.ResolveOsPath(string(records[0].GetField(FilePath)))
-				err = os.RemoveAll(fileOsPath)
+		if record != nil {
+			// Remove file or directory.
+			if err = table.Del(database.Id(fileId)); err == nil {
+				// Remove all children.
+				if err = table.Del(database.EqUInt64(FileParentId, fileId)); err == nil {
+					path := record.GetString(FilePath)
+					err = os.RemoveAll(vl.ResolveOsPath(path))
+				}
 			}
+		} else {
+			return ErrFileNotFound
 		}
 	}
 	return err
@@ -270,8 +313,11 @@ func (vl *volume) ResolveLocalPath(original string) string {
 
 // Abstraction for working with volumes.
 type VolumeManager interface {
+	// The functions creates a volume.
 	Create(api.VolumeInfo) (Volume, error)
-	Volume(string) (Volume, error)
+	// The function returns the volume by id.
+	Volume(uint64) (Volume, error)
+	// The function returns all volumes.
 	Volumes() ([]Volume, error)
 }
 
@@ -281,19 +327,19 @@ func NewVolumeManager(db database.Database) (VolumeManager, error) {
 	records, err := table.Get()
 	if err == nil {
 		volumes := make([]Volume, len(records))
-		for idx := range records {
-			var volume Volume
-			if volume, err = volumeFromRecord(db, records[idx]); err == nil {
-				volume.ReIndex()
-				volumes[idx] = volume
-			} else {
-				break
+		for idx, record := range records {
+			volumes[idx] = &volume{
+				info: api.VolumeInfo{
+					Id:        record.GetRecordId(),
+					Name:      record.GetString(VolumeName),
+					OsPath:    record.GetString(VolumeOsPath),
+					LocalPath: record.GetString(VolumeLocalPath),
+				},
+				db: db,
 			}
 		}
 
-		if err == nil {
-			return &volumeManager{db: db}, nil
-		}
+		return &volumeManager{db: db}, nil
 	}
 	return nil, err
 }
@@ -305,43 +351,50 @@ type volumeManager struct {
 func (mng *volumeManager) Create(info api.VolumeInfo) (Volume, error) {
 	table := mng.db.Table(VolumeTable)
 
-	info.OsPath = NormalizePath(info.OsPath, true)
-	info.LocalPath = NormalizePath(info.LocalPath, true)
+	osPath := NormalizePath(info.OsPath, true)
+	localPath := NormalizePath(info.LocalPath, true)
 
 	record := table.New()
 	record.SetString(VolumeName, info.Name)
-	record.SetString(VolumeOsPath, info.OsPath)
-	record.SetString(VolumeLocalPath, info.LocalPath)
+	record.SetString(VolumeOsPath, osPath)
+	record.SetString(VolumeLocalPath, localPath)
 
 	err := table.Set(record)
 	if err == nil {
 		if err = os.MkdirAll(info.OsPath, 0755); err == nil { // TODO. 0755?
-			return &volume{info: info, db: mng.db}, nil
+			return &volume{
+				info: api.VolumeInfo{
+					Id:        record.GetRecordId(),
+					Name:      info.Name,
+					OsPath:    osPath,
+					LocalPath: localPath,
+				},
+				db: mng.db,
+			}, nil
 		}
 	}
 	return nil, err
 }
 
-func (mng *volumeManager) Volume(path string) (Volume, error) {
-	name := path
-	if strings.Contains(path, volumeSeparator) {
-		name = strings.Split(path, volumeSeparator)[0]
-	}
-
+func (mng *volumeManager) Volume(volumeId uint64) (Volume, error) {
 	table := mng.db.Table(VolumeTable)
-	record, err := table.Any(database.Eq(VolumeName, []byte(name)))
-	if record != nil && err == nil {
-		return &volume{
-			id: record.GetRecordId(),
-			info: api.VolumeInfo{
-				Name:      record.GetString(VolumeName),
-				LocalPath: record.GetString(VolumeLocalPath),
-				OsPath:    record.GetString(VolumeOsPath),
-			},
-			db: mng.db,
-		}, nil
+	record, err := table.Any(database.Id(volumeId))
+	if err == nil {
+		if record != nil {
+			return &volume{
+				info: api.VolumeInfo{
+					Id:        record.GetRecordId(),
+					Name:      record.GetString(VolumeName),
+					LocalPath: record.GetString(VolumeLocalPath),
+					OsPath:    record.GetString(VolumeOsPath),
+				},
+				db: mng.db,
+			}, nil
+		} else {
+			err = ErrVolumeNotFound
+		}
 	}
-	return nil, errors.Join(ErrVolumeNotFound, err)
+	return nil, err
 }
 
 func (mng *volumeManager) Volumes() ([]Volume, error) {
@@ -351,8 +404,8 @@ func (mng *volumeManager) Volumes() ([]Volume, error) {
 		volumes := make([]Volume, len(records))
 		for index, record := range records {
 			volumes[index] = &volume{
-				id: record.GetRecordId(),
 				info: api.VolumeInfo{
+					Id:        record.GetRecordId(),
 					Name:      record.GetString(VolumeName),
 					LocalPath: record.GetString(VolumeLocalPath),
 					OsPath:    record.GetString(VolumeOsPath),
@@ -373,36 +426,4 @@ func NormalizePath(path string, isDir bool) string {
 		}
 	}
 	return path
-}
-
-func volumeFromRecord(db database.Database, record database.Record) (Volume, error) {
-	return &volume{
-		id: record.GetRecordId(),
-		info: api.VolumeInfo{
-			Name:      string(record.GetField(VolumeName)),
-			LocalPath: strings.Join([]string{string(record.GetField(VolumeName)), volumeSeparator, pathSeparator}, ""),
-			OsPath:    string(record.GetField(VolumeOsPath)),
-		},
-		db: db,
-	}, nil
-}
-
-func fileInfoToRecord(table database.Table, parentPath string, volumeId uint64, info *api.FileInfo) database.Record {
-	record := table.New()
-	record.SetField(FileName, []byte(info.FileName))
-	record.SetField(FilePath, []byte(info.FilePath))
-	record.SetUint8(FileType, uint8(info.FileType))
-	record.SetUint64(FileSize, uint64(info.FileSize))
-	record.SetField(FileParentPath, []byte(parentPath))
-	record.SetUint64(FileVolumeId, volumeId)
-	return record
-}
-
-func fileInfoFromRecord(record database.Record) (*api.FileInfo, error) {
-	return &api.FileInfo{
-		FileName: string(record.GetField(FileName)),
-		FilePath: string(record.GetField(FilePath)),
-		FileType: api.FileType(record.GetUint8(FileType)),
-		FileSize: int64(record.GetUint64(FileSize)),
-	}, nil
 }

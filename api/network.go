@@ -15,6 +15,7 @@ var RFC1918 = []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}
 
 const cidrEnd = "1.0/24"
 const ipSeparator = "."
+const decimalBase = 10
 
 // Network configuration.
 type NetworkConfig struct {

@@ -17,6 +17,8 @@ import (
 const portSeparator = ":"
 const paramsSeparator = "?"
 const httpProtocol = "http://"
+const uint64BitSize = 64
+const decimalBase = 10
 
 type httpRequest struct {
 	ip       net.IP
@@ -55,6 +57,18 @@ func (req *httpRequest) ParamInt(name string) (int, error) {
 	value, err := req.ParamRequired(name)
 	if err == nil {
 		param, err = strconv.Atoi(value)
+		if err != nil {
+			err = errors.Join(fmt.Errorf("[%s] %w", name, ErrIncorrectParamValue), err)
+		}
+	}
+	return param, err
+}
+
+func (req *httpRequest) ParamUInt64(name string) (uint64, error) {
+	param := uint64(0)
+	value, err := req.ParamRequired(name)
+	if err == nil {
+		param, err = strconv.ParseUint(value, decimalBase, uint64BitSize)
 		if err != nil {
 			err = errors.Join(fmt.Errorf("[%s] %w", name, ErrIncorrectParamValue), err)
 		}

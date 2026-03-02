@@ -10,7 +10,7 @@ import (
 	"netfs/internal/server/volume"
 	"os"
 	"os/signal"
-	"strconv"
+	"path/filepath"
 	"syscall"
 )
 
@@ -45,15 +45,15 @@ func (srv *Server) Start() error {
 	srv.receiver.Receive(api.Endpoints.FileCopyStart, srv.FileCopyStartHandle)
 	srv.receiver.Receive(api.Endpoints.FileCopyStatus.Name, srv.FileCopyStatusHandle)
 	srv.receiver.Receive(api.Endpoints.FileCopyStop.Name, srv.FileCopyCancelHandle)
-	srv.receiver.Receive(api.Endpoints.Volume, srv.VolumeHandle)
+	srv.receiver.Receive(api.Endpoints.Volume.Name, srv.VolumeHandle)
 	srv.receiver.Receive(api.Endpoints.VolumeChildren.Name, srv.VolumeChildrenHandle)
 
-	dbErr := srv.db.Start()
-
 	// TODO. Remove it, for test only
-	vl, _ := srv.volumes.Create(api.VolumeInfo{Name: "Disk D", LocalPath: "d:/", OsPath: "D:/andrey/workspace"})
+	path, _ := filepath.Abs("./data")
+	vl, _ := srv.volumes.Create(api.VolumeInfo{Name: "Test", LocalPath: "test:/", OsPath: path})
 	vl.ReIndex()
 
+	dbErr := srv.db.Start()
 	recErr := srv.receiver.Start()
 	tskErr := srv.tasks.Start()
 
@@ -117,15 +117,31 @@ func (srv *Server) ServerHostHandle(req transport.Request) ([]byte, any, error) 
 
 // The function handles request and returns volumes.
 func (srv *Server) VolumeHandle(req transport.Request) ([]byte, any, error) {
-	volumes, err := srv.volumes.Volumes()
-	if err == nil {
-		result := make([]api.VolumeInfo, len(volumes))
-		for index, volume := range volumes {
-			result[index] = volume.Info()
+	var err error
+	var result []api.VolumeInfo
+
+	volumeId, _ := req.ParamUInt64(api.Endpoints.Volume.VolumeId)
+	if volumeId != 0 {
+		srv.log.Info("VolumeHandle() volumeId: %v", volumeId)
+
+		var volume volume.Volume
+		if volume, err = srv.volumes.Volume(volumeId); err == nil {
+			result = []api.VolumeInfo{volume.Info()}
 		}
-		return nil, result, nil
+	} else {
+		if volumes, err := srv.volumes.Volumes(); err == nil {
+			result = make([]api.VolumeInfo, len(volumes))
+			for index, volume := range volumes {
+				result[index] = volume.Info()
+			}
+		}
 	}
-	return nil, nil, err
+
+	if err != nil {
+		srv.log.Error("VolumeHandle() err: %v", err)
+	}
+	srv.log.Info("VolumeHandle() volumes: %v", result)
+	return nil, result, err
 }
 
 // The function handles request and returns elements of the volume.
@@ -142,7 +158,7 @@ func (srv *Server) VolumeChildrenHandle(req transport.Request) ([]byte, any, err
 
 		var volume volume.Volume
 		if volume, err = srv.volumes.Volume(volumeId); err == nil {
-			children, err = volume.Children(volumeId, skip, limit)
+			children, err = volume.Children(0, skip, limit)
 		}
 	}
 
@@ -153,7 +169,7 @@ func (srv *Server) VolumeChildrenHandle(req transport.Request) ([]byte, any, err
 	return nil, children, err
 }
 
-// The function returns information about the file.
+// The function handles request and returns information about the file.
 func (srv *Server) FileInfoHandle(req transport.Request) ([]byte, any, error) {
 	var info *api.FileInfo
 
@@ -177,7 +193,7 @@ func (srv *Server) FileInfoHandle(req transport.Request) ([]byte, any, error) {
 	return nil, info, err
 }
 
-// The function returns children of the directory.
+// The function handles request and returns children of the directory.
 func (srv *Server) FileChildrenHandle(req transport.Request) ([]byte, any, error) {
 	var children []api.FileInfo
 
@@ -203,10 +219,8 @@ func (srv *Server) FileChildrenHandle(req transport.Request) ([]byte, any, error
 	return nil, children, err
 }
 
-// The function creates a new file or directory by api.FileInfo.
+// The function handles request and creates a new file or directory by api.FileInfo.
 func (srv *Server) FileCreateHandle(req transport.Request) ([]byte, any, error) {
-	var created *api.FileInfo
-
 	info := &api.FileInfo{}
 	_, err := req.Body(info)
 	if err == nil {
@@ -215,19 +229,19 @@ func (srv *Server) FileCreateHandle(req transport.Request) ([]byte, any, error) 
 		var vl volume.Volume
 		vl, err = srv.volumes.Volume(info.VolumeId)
 		if err == nil {
-			created, err = vl.Create(info)
+			info, err = vl.Create(info)
 		}
 	}
 
 	if err != nil {
 		srv.log.Error("FileCreateHandle() err: %v", err)
 	} else {
-		srv.log.Info("FileCreateHandle() created: %v", *created)
+		srv.log.Info("FileCreateHandle() created: %v", *info)
 	}
-	return nil, created, err
+	return nil, info, err
 }
 
-// The function writes data to a file.
+// The function handles request and writes data to a file.
 func (srv *Server) FileWriteHandle(req transport.Request) ([]byte, any, error) {
 	volumeId, volumeIdErr := req.ParamUInt64(api.Endpoints.FileInfo.VolumeId)
 	fileId, fileIdErr := req.ParamUInt64(api.Endpoints.FileInfo.FileId)
@@ -248,7 +262,7 @@ func (srv *Server) FileWriteHandle(req transport.Request) ([]byte, any, error) {
 	return nil, nil, err
 }
 
-// The function removes the file.
+// The function handles request and removes the file.
 func (srv *Server) FileRemoveHandle(req transport.Request) ([]byte, any, error) {
 	volumeId, volumeIdErr := req.ParamUInt64(api.Endpoints.FileInfo.VolumeId)
 	fileId, fileIdErr := req.ParamUInt64(api.Endpoints.FileInfo.FileId)
@@ -269,42 +283,67 @@ func (srv *Server) FileRemoveHandle(req transport.Request) ([]byte, any, error) 
 	return nil, nil, err
 }
 
-// Starts a new task to copy the file or directory.
-func (srv *Server) FileCopyStartHandle(req transport.Request) ([]byte, any, error) { // TODO. Check len(files) == 2
+// The function handles request and starts a new task to copy the file or directory.
+func (srv *Server) FileCopyStartHandle(req transport.Request) ([]byte, any, error) {
+	var result api.RemoteTask
+
 	files := &[]api.RemoteFile{}
 	_, err := req.Body(files)
 	if err == nil {
+		srv.log.Info("FileCopyStartHandle() files: %v", *files)
+
 		var copyTask *task.CopyTask
 		copyTask, err = task.NewCopyTask((*files)[0], (*files)[1])
 		if err == nil {
+			srv.log.Info("FileCopyStartHandle() task: %v", *copyTask)
+
 			var taskId int
 			if taskId, err = srv.tasks.SetTask(copyTask); err == nil {
-				return nil, api.RemoteTask{Id: taskId, Status: copyTask.Status, Host: srv.network.LocalHost()}, err
+				result = api.RemoteTask{Id: taskId, Status: copyTask.Status, Host: srv.network.LocalHost()}
 			}
 		}
 	}
-	return nil, nil, err
+
+	if err != nil {
+		srv.log.Error("FileCopyStartHandle() err: %v", err)
+	} else {
+		srv.log.Info("FileCopyStartHandle() task: %v", result)
+	}
+	return nil, result, err
 }
 
-// Returns status of the task.
-func (srv *Server) FileCopyStatusHandle(req transport.Request) ([]byte, any, error) { // TODO. Add validation
-	param := req.Param(api.Endpoints.FileCopyStatus.TaskId)
-	id, err := strconv.Atoi(param)
+// The function handles request and returns status of the task.
+func (srv *Server) FileCopyStatusHandle(req transport.Request) ([]byte, any, error) {
+	var result api.RemoteTask
+
+	taskId, err := req.ParamUInt64(api.Endpoints.FileCopyStatus.TaskId)
 	if err == nil {
+		srv.log.Info("FileCopyStatusHandle() taskId: %v", taskId)
+
 		var task task.Task
-		if task, err = srv.tasks.GetTask(id); err == nil {
-			return nil, api.RemoteTask{Id: id, Status: task.TaskStatus(), Host: srv.network.LocalHost()}, nil
+		if task, err = srv.tasks.GetTask(int(taskId)); err == nil { // TODO. int(taskId)
+			result = api.RemoteTask{Id: task.TaskId(), Status: task.TaskStatus(), Host: srv.network.LocalHost()}
 		}
 	}
-	return nil, nil, err
+
+	if err != nil {
+		srv.log.Error("FileCopyStatusHandle() err: %v", err)
+	} else {
+		srv.log.Info("FileCopyStatusHandle() task: %v", result)
+	}
+	return nil, result, err
 }
 
-// Stops the task.
-func (srv *Server) FileCopyCancelHandle(req transport.Request) ([]byte, any, error) { // TODO. Add validation
-	param := req.Param(api.Endpoints.FileCopyStop.TaskId)
-	id, err := strconv.Atoi(param)
+// The function handles request and stops the task.
+func (srv *Server) FileCopyCancelHandle(req transport.Request) ([]byte, any, error) {
+	taskId, err := req.ParamUInt64(api.Endpoints.FileCopyStop.TaskId)
 	if err == nil {
-		err = srv.tasks.CancelTask(id)
+		srv.log.Info("FileCopyCancelHandle() taskId: %v", taskId)
+		err = srv.tasks.CancelTask(int(taskId)) // TODO. int(taskId)
+	}
+
+	if err != nil {
+		srv.log.Error("FileCopyCancelHandle() err: %v", err)
 	}
 	return nil, nil, err
 }

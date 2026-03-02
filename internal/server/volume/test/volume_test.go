@@ -75,13 +75,14 @@ func TestChildrenSuccess(t *testing.T) {
 	}
 
 	vl.Remove(created.Id)
+	vl.Remove(createdChild.Id)
 }
 
 func TestReadSuccess(t *testing.T) {
 	vlOsPath, _ := filepath.Abs("./")
 	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
 	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
-	created, _ := vl.Create(&api.FileInfo{Name: "TestReadSuccess.txt", Type: api.FILE, ParentId: vl.Info().Id, VolumeId: vl.Info().Id})
+	created, _ := vl.Create(&api.FileInfo{Name: "TestReadSuccess.txt", Type: api.FILE, VolumeId: vl.Info().Id})
 
 	generated := generate(100)
 	vl.Write(created.Id, generated)
@@ -111,7 +112,7 @@ func TestWriteSuccess(t *testing.T) {
 	vlOsPath, _ := filepath.Abs("./")
 	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
 	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
-	created, _ := vl.Create(&api.FileInfo{Name: "TestWriteSuccess.txt", Type: api.FILE, ParentId: vl.Info().Id, VolumeId: vl.Info().Id})
+	created, _ := vl.Create(&api.FileInfo{Name: "TestWriteSuccess.txt", Type: api.FILE, VolumeId: vl.Info().Id})
 
 	generated := generate(100)
 	err := vl.Write(created.Id, generated)
@@ -135,7 +136,7 @@ func TestResolvePathSuccess(t *testing.T) {
 	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
 	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
 
-	created, _ := vl.Create(&api.FileInfo{Name: "testfile.txt", Type: api.FILE, ParentId: vl.Info().Id, VolumeId: vl.Info().Id})
+	created, _ := vl.Create(&api.FileInfo{Name: "testfile.txt", Type: api.FILE, VolumeId: vl.Info().Id})
 	path := vl.ResolveOsPath(created.Path)
 	if path != volume.NormalizePath(osPath, false) {
 		t.Fatalf("path should be [%s], but it is [%s]", osPath, path)
@@ -149,7 +150,7 @@ func TestCreateDirectorySuccess(t *testing.T) {
 	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
 	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
 
-	created, err := vl.Create(&api.FileInfo{Name: "TestCreateDirectorySuccess", Type: api.DIRECTORY, ParentId: vl.Info().Id, VolumeId: vl.Info().Id})
+	created, err := vl.Create(&api.FileInfo{Name: "TestCreateDirectorySuccess", Type: api.DIRECTORY, VolumeId: vl.Info().Id})
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -164,7 +165,7 @@ func TestCreateDirectorySuccess(t *testing.T) {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
 
-	createdChild, err := vl.Create(&api.FileInfo{Name: "TestCreateDirectorySuccess2", Type: api.DIRECTORY, ParentId: created.Id, VolumeId: vl.Info().Id})
+	createdChild, err := vl.Create(&api.FileInfo{Name: "TestCreateDirectorySuccess2", Type: api.DIRECTORY, VolumeId: vl.Info().Id})
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}
@@ -180,6 +181,7 @@ func TestCreateDirectorySuccess(t *testing.T) {
 	}
 
 	vl.Remove(created.Id)
+	vl.Remove(createdChild.Id)
 }
 
 func TestCreateFileSuccess(t *testing.T) {
@@ -187,7 +189,7 @@ func TestCreateFileSuccess(t *testing.T) {
 	manager, _ := volume.NewVolumeManager(database.NewDatabase(database.DatabaseConfig{}))
 	vl, _ := manager.Create(api.VolumeInfo{Name: "testvolume", LocalPath: "testvolume:/", OsPath: vlOsPath})
 
-	created, err := vl.Create(&api.FileInfo{Name: "TestCreateFileSuccess.txt", Type: api.FILE, ParentId: vl.Info().Id, VolumeId: vl.Info().Id})
+	created, err := vl.Create(&api.FileInfo{Name: "TestCreateFileSuccess.txt", Type: api.FILE, VolumeId: vl.Info().Id})
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
 	}

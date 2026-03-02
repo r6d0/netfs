@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"netfs/api"
 	"netfs/internal/server/database"
+	"netfs/internal/server/volume"
 )
 
 type TaskCopyConfig struct {
@@ -48,37 +49,38 @@ func (task *CopyTask) BeforeExecute(TaskExecuteContext) error {
 }
 
 func (task *CopyTask) Execute(ctx TaskExecuteContext) error {
-	// config := ctx.Config.Copy
-	// source := task.Payload.Source
-	// target := task.Payload.Target
+	config := ctx.Config.Copy
+	source := task.Payload.Source
+	target := task.Payload.Target
 
-	// err := target.Create(ctx.Transport)
-	// if err == nil {
-	// 	size := config.BufferSize
-	// 	path := source.Info.FilePath
+	remoteVl, err := target.Host.Volume(ctx.Transport, target.Info.VolumeId)
+	if err == nil {
+		var created *api.RemoteFile
+		if created, err = remoteVl.Create(ctx.Transport, target.Info); err == nil {
+			size := config.BufferSize
 
-	// 	var vl volume.Volume
-	// 	if vl, err = ctx.Volumes.Volume(path); err == nil {
-	// 		var buffer []byte
-	// 		if buffer, err = vl.Read(path, task.Payload.Offset, size); err == nil {
-	// 			if err = target.Write(ctx.Transport, buffer); err == nil {
-	// 				task.Status = api.Waiting
-	// 				task.Payload.Offset += int64(len(buffer))
-	// 			}
-	// 		}
+			var vl volume.Volume
+			if vl, err = ctx.Volumes.Volume(source.Info.VolumeId); err == nil {
+				var buffer []byte
+				if buffer, err = vl.Read(source.Info.Id, task.Payload.Offset, size); err == nil {
+					if err = created.Write(ctx.Transport, buffer); err == nil {
+						task.Status = api.Waiting
+						task.Payload.Offset += int64(len(buffer))
+					}
+				}
 
-	// 		if len(buffer) < int(size) {
-	// 			task.Status = api.Completed
-	// 		}
-	// 	}
-	// }
+				if len(buffer) < int(size) {
+					task.Status = api.Completed
+				}
+			}
+		}
+	}
 
-	// if err != nil {
-	// 	task.Status = api.Failed
-	// 	task.Payload.Error = err.Error()
-	// }
-	// return err
-	return nil
+	if err != nil {
+		task.Status = api.Failed
+		task.Payload.Error = err.Error()
+	}
+	return err
 }
 
 func (*CopyTask) AfterExecute(TaskExecuteContext) error {

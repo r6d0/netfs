@@ -11,7 +11,7 @@ func TestWriteSuccess(t *testing.T) {
 	beforeEach()
 	defer afterEach()
 
-	rec.Receive(api.Endpoints.FileWrite.Name, func(req transport.Request) ([]byte, any, error) {
+	rec.Receive(api.Endpoints.Volume.Name, func(req transport.Request) ([]byte, any, error) {
 		return nil, []api.VolumeInfo{api.VolumeInfo{Id: testVolumeId}}, nil
 	})
 	rec.Receive(api.Endpoints.FileWrite.Name, func(req transport.Request) ([]byte, any, error) {
@@ -41,7 +41,7 @@ func TestWriteResponseError(t *testing.T) {
 	beforeEach()
 	defer afterEach()
 
-	rec.Receive(api.Endpoints.Volume, func(req transport.Request) ([]byte, any, error) {
+	rec.Receive(api.Endpoints.Volume.Name, func(req transport.Request) ([]byte, any, error) {
 		return nil, []api.VolumeInfo{api.VolumeInfo{Id: testVolumeId}}, nil
 	})
 	rec.Receive(api.Endpoints.FileWrite.Name, func(transport.Request) ([]byte, any, error) {
@@ -61,7 +61,7 @@ func TestCopyToSuccess(t *testing.T) {
 	beforeEach()
 	defer afterEach()
 
-	rec.Receive(api.Endpoints.Volume, func(req transport.Request) ([]byte, any, error) {
+	rec.Receive(api.Endpoints.Volume.Name, func(req transport.Request) ([]byte, any, error) {
 		return nil, []api.VolumeInfo{api.VolumeInfo{Id: testVolumeId}}, nil
 	})
 	rec.Receive(api.Endpoints.FileCopyStart, func(transport.Request) ([]byte, any, error) {
@@ -87,7 +87,7 @@ func TestCopyToResponseError(t *testing.T) {
 	beforeEach()
 	defer afterEach()
 
-	rec.Receive(api.Endpoints.Volume, func(req transport.Request) ([]byte, any, error) {
+	rec.Receive(api.Endpoints.Volume.Name, func(req transport.Request) ([]byte, any, error) {
 		return nil, []api.VolumeInfo{api.VolumeInfo{Id: testVolumeId}}, nil
 	})
 	rec.Receive(api.Endpoints.FileCopyStart, func(transport.Request) ([]byte, any, error) {
@@ -107,7 +107,7 @@ func TestFileRemoveSuccess(t *testing.T) {
 	beforeEach()
 	defer afterEach()
 
-	rec.Receive(api.Endpoints.Volume, func(req transport.Request) ([]byte, any, error) {
+	rec.Receive(api.Endpoints.Volume.Name, func(req transport.Request) ([]byte, any, error) {
 		return nil, []api.VolumeInfo{api.VolumeInfo{Id: testVolumeId}}, nil
 	})
 	rec.Receive(api.Endpoints.FileRemove.Name, func(req transport.Request) ([]byte, any, error) {
@@ -137,7 +137,7 @@ func TestFileRemoveResponseError(t *testing.T) {
 	beforeEach()
 	defer afterEach()
 
-	rec.Receive(api.Endpoints.Volume, func(req transport.Request) ([]byte, any, error) {
+	rec.Receive(api.Endpoints.Volume.Name, func(req transport.Request) ([]byte, any, error) {
 		return nil, []api.VolumeInfo{api.VolumeInfo{Id: testVolumeId}}, nil
 	})
 	rec.Receive(api.Endpoints.FileRemove.Name, func(transport.Request) ([]byte, any, error) {
@@ -157,7 +157,7 @@ func TestChildrenSuccess(t *testing.T) {
 	beforeEach()
 	defer afterEach()
 
-	rec.Receive(api.Endpoints.Volume, func(req transport.Request) ([]byte, any, error) {
+	rec.Receive(api.Endpoints.Volume.Name, func(req transport.Request) ([]byte, any, error) {
 		return nil, []api.VolumeInfo{api.VolumeInfo{Id: testVolumeId}}, nil
 	})
 	rec.Receive(api.Endpoints.FileChildren.Name, func(req transport.Request) ([]byte, any, error) {
@@ -199,6 +199,9 @@ func TestChildrenResponseError(t *testing.T) {
 	beforeEach()
 	defer afterEach()
 
+	rec.Receive(api.Endpoints.Volume.Name, func(req transport.Request) ([]byte, any, error) {
+		return nil, []api.VolumeInfo{api.VolumeInfo{Id: testVolumeId}}, nil
+	})
 	rec.Receive(api.Endpoints.FileChildren.Name, func(req transport.Request) ([]byte, any, error) {
 		return nil, nil, errors.New("can't submit request")
 	})

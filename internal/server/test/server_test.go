@@ -1,323 +1,154 @@
 package server_test
 
-// var config = server.ServerConfig{
-// 	Network:  api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: time.Second * 5},
-// 	Log:      logger.LoggerConfig{Level: logger.Info},
-// 	Database: database.DatabaseConfig{Path: "./"},
-// 	Task:     task.TaskExecuteConfig{MaxAvailableTasks: 100, Copy: task.TaskCopyConfig{BufferSize: 1024}},
-// }
+import (
+	"fmt"
+	"netfs/api"
+	"netfs/api/transport"
+	"netfs/internal/logger"
+	"netfs/internal/server"
+	"netfs/internal/server/database"
+	"netfs/internal/server/task"
+	"testing"
+	"time"
+)
 
-// var srv *server.Server
+var config = server.ServerConfig{
+	Network:  api.NetworkConfig{Port: 80, Protocol: transport.HTTP, Timeout: time.Second * 1},
+	Log:      logger.LoggerConfig{Level: logger.Info},
+	Database: database.DatabaseConfig{Path: "./"},
+	Task:     task.TaskExecuteConfig{MaxAvailableTasks: 100, Copy: task.TaskCopyConfig{BufferSize: 1024}, TasksWaitingSecond: 1},
+}
 
-// func beforeEach() {
-// 	var err error
-// 	srv, err = server.NewServer(config)
-// 	if err != nil {
-// 		panic(fmt.Sprintf("error should be nil, but err is [%s]", err))
-// 	}
-// 	go func() {
-// 		srv.Start()
-// 	}()
-// }
+var srv *server.Server
 
-// func afterEach() {
-// 	srv.Stop()
-// }
+func beforeEach() {
+	var err error
+	srv, err = server.NewServer(config)
+	if err != nil {
+		panic(fmt.Sprintf("error should be nil, but err is [%s]", err))
+	}
+	go func() {
+		srv.Start()
+	}()
+}
 
-// func TestServerHostHandleSuccess(t *testing.T) {
-// 	beforeEach()
-// 	defer afterEach()
+func afterEach() {
+	srv.Stop()
+}
 
-// 	network, _ := api.NewNetwork(config.Network)
-// 	host, err := network.Host(network.LocalIP())
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
+func TestServerHostHandleSuccess(t *testing.T) {
+	beforeEach()
+	defer afterEach()
 
-// 	if host == nil {
-// 		t.Fatalf("host should be not nil")
-// 	}
-// }
+	network, _ := api.NewNetwork(config.Network)
+	host, err := network.Host(network.LocalIP())
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
 
-// func TestFileInfoHandleSuccess(t *testing.T) {
-// 	beforeEach()
-// 	defer afterEach()
+	if host == nil {
+		t.Fatalf("host should be not nil")
+	}
+}
 
-// 	path := "testvolume:/testdir/testfile.txt"
+func TestVolumesHandleSuccess(t *testing.T) {
+	beforeEach()
+	defer afterEach()
 
-// 	network, _ := api.NewNetwork(config.Network)
-// 	info, err := network.LocalHost().File(network.Transport(), path)
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
+	network, _ := api.NewNetwork(config.Network)
+	host := network.LocalHost()
+	volumes, err := host.Volumes(network.Transport())
 
-// 	if info.Info.FilePath != path {
-// 		t.Fatalf("file: [%s] not found", path)
-// 	}
-// }
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
 
-// func TestFileChildrenHandleSuccess(t *testing.T) {
-// 	beforeEach()
-// 	defer afterEach()
+	if len(volumes) == 0 {
+		t.Fatal("volumes should be not empty, but it is empty")
+	}
+}
 
-// 	path := "testvolume:/"
+func TestFileChildrenHandleSuccess(t *testing.T) {
+	beforeEach()
+	defer afterEach()
 
-// 	network, _ := api.NewNetwork(config.Network)
-// 	file, err := network.LocalHost().File(network.Transport(), path)
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
+	network, _ := api.NewNetwork(config.Network)
+	host := network.LocalHost()
+	volumes, _ := host.Volumes(network.Transport())
 
-// 	children, err := file.Children(network.Transport(), 0, 100)
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
+	dir, _ := volumes[0].Create(network.Transport(), api.FileInfo{Name: "test", Type: api.DIRECTORY, VolumeId: volumes[0].Info.Id})
+	file, _ := volumes[0].Create(network.Transport(), api.FileInfo{Name: "test.txt", Type: api.FILE, VolumeId: volumes[0].Info.Id, ParentId: dir.Info.Id})
 
-// 	if len(children) == 0 {
-// 		t.Fatal("children should be not empty")
-// 	}
-// }
+	children, err := dir.Children(network.Transport(), 0, 100)
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
 
-// func TestFileCreateHandleSuccess(t *testing.T) {
-// 	beforeEach()
-// 	defer afterEach()
+	if children[0].Info.Id != file.Info.Id {
+		t.Fatalf("file id should be [%d], but file id is [%d]", children[0].Info.Id, file.Info.Id)
+	}
 
-// 	path := "testvolume:/dir1/TestFileCreateHandleSuccess"
+	dir.Remove(network.Transport())
+}
 
-// 	osPath, _ := filepath.Abs("./testvolume/dir1")
-// 	defer os.RemoveAll(osPath)
+func TestFileCreateHandleSuccess(t *testing.T) {
+	beforeEach()
+	defer afterEach()
 
-// 	network, _ := api.NewNetwork(config.Network)
-// 	host := network.LocalHost()
-// 	file := api.RemoteFile{Host: host, Info: api.FileInfo{FileName: "TestFileCreateHandleSuccess", FilePath: path, FileType: api.FILE}}
-// 	err := file.Create(network.Transport())
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
+	network, _ := api.NewNetwork(config.Network)
+	host := network.LocalHost()
+	volumes, _ := host.Volumes(network.Transport())
 
-// 	_, err = os.Stat(filepath.Join(osPath, "TestFileCreateHandleSuccess"))
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-// }
+	file, err := volumes[0].Create(network.Transport(), api.FileInfo{Name: "test.txt", Type: api.FILE, VolumeId: volumes[0].Info.Id})
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
 
-// func TestFileRemoveHandleSuccess(t *testing.T) {
-// 	beforeEach()
-// 	defer afterEach()
+	if file == nil {
+		t.Fatal("file should be not nil")
+	}
 
-// 	path := "testvolume:/dir1/TestFileRemoveHandleSuccess"
+	file, _ = volumes[0].File(network.Transport(), file.Info.Id)
+	if file == nil {
+		t.Fatal("file should be not nil")
+	}
 
-// 	osPath, _ := filepath.Abs("./dir1")
-// 	defer os.RemoveAll(osPath)
+	file.Remove(network.Transport())
+}
 
-// 	network, _ := api.NewNetwork(config.Network)
-// 	host := network.LocalHost()
-// 	file := api.RemoteFile{Host: host, Info: api.FileInfo{FileName: "TestFileRemoveHandleSuccess", FilePath: path, FileType: api.FILE}}
-// 	err := file.Create(network.Transport())
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
+func TestFileCopyStartHandleSuccess(t *testing.T) {
+	beforeEach()
+	defer afterEach()
 
-// 	err = file.Remove(network.Transport())
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
+	network, _ := api.NewNetwork(config.Network)
+	host := network.LocalHost()
+	volumes, _ := host.Volumes(network.Transport())
 
-// 	_, err = os.Stat(filepath.Join(osPath, "TestFileRemoveHandleSuccess"))
-// 	if err == nil {
-// 		t.Fatal("error should be not nil, but err is nil")
-// 	}
-// }
+	file, _ := volumes[0].Create(network.Transport(), api.FileInfo{Name: "test.txt", Type: api.FILE, VolumeId: volumes[0].Info.Id})
+	_, err := file.CopyTo(network.Transport(), api.RemoteFile{Host: host, Info: api.FileInfo{Name: "test_copy.txt", Type: api.FILE, VolumeId: volumes[0].Info.Id}})
+	if err != nil {
+		t.Fatalf("error should be nil, but err is [%s]", err)
+	}
 
-// func TestFileCopyStartHandleSuccess(t *testing.T) {
-// 	beforeEach()
-// 	defer afterEach()
+	time.Sleep(2 * time.Second)
 
-// 	originalPath := "testvolume:/TestFileCopyStartHandleSuccess/TestFileCopyStartHandleSuccess.txt"
-// 	copyPath := "testvolume:/TestFileCopyStartHandleSuccessCopy/TestFileCopyStartHandleSuccessCopy.txt"
+	fileId := uint64(0)
+	children, _ := volumes[0].Children(network.Transport(), 0, 100)
+	for _, child := range children {
+		if child.Info.Name == "test_copy.txt" {
+			fileId = child.Info.Id
+			break
+		}
+	}
+	if fileId == 0 {
+		t.Fatal("fileId should be not empty")
+	}
 
-// 	osPath, _ := filepath.Abs("./testvolume/TestFileCopyStartHandleSuccess")
-// 	osCopyPath, _ := filepath.Abs("./testvolume/TestFileCopyStartHandleSuccessCopy")
-// 	defer os.RemoveAll(osPath)
-// 	defer os.RemoveAll(osCopyPath)
+	fileCopy, _ := volumes[0].File(network.Transport(), fileId)
+	if fileCopy == nil {
+		t.Fatal("file should be not nil")
+	}
 
-// 	network, _ := api.NewNetwork(config.Network)
-// 	host := network.LocalHost()
-// 	file := api.RemoteFile{Host: host, Info: api.FileInfo{FileName: "TestFileCopyStartHandleSuccess.txt", FilePath: originalPath, FileType: api.FILE}}
-// 	err := file.Create(network.Transport())
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-
-// 	generated := generate(100)
-// 	err = file.Write(network.Transport(), generated)
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-
-// 	var task *api.RemoteTask
-// 	copyFile := api.RemoteFile{Host: host, Info: api.FileInfo{FileName: "TestFileCopyStartHandleSuccessCopy.txt", FilePath: copyPath, FileType: api.FILE}}
-// 	task, err = file.CopyTo(network.Transport(), copyFile)
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-// 	if task == nil {
-// 		t.Fatal("task should be not nil")
-// 	}
-// 	if task.Status != api.Waiting {
-// 		t.Fatalf("status should be [%d]", api.Waiting)
-// 	}
-// 	time.Sleep(5 * time.Second)
-
-// 	_, err = os.Stat(filepath.Join(osCopyPath, copyFile.Info.FileName))
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-
-// 	var data []byte
-// 	data, err = os.ReadFile(filepath.Join(osCopyPath, copyFile.Info.FileName))
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-
-// 	if !bytes.Equal(data, generated) {
-// 		t.Fatalf("data should be equal")
-// 	}
-// }
-
-// func TestFileCopyStatusHandleSuccess(t *testing.T) {
-// 	beforeEach()
-// 	defer afterEach()
-
-// 	originalPath := "testvolume:/TestFileCopyStatusHandleSuccess/TestFileCopyStatusHandleSuccess.txt"
-// 	copyPath := "testvolume:/TestFileCopyStatusHandleSuccessCopy/TestFileCopyStatusHandleSuccessCopy.txt"
-
-// 	osPath, _ := filepath.Abs("./TestFileCopyStatusHandleSuccess")
-// 	osCopyPath, _ := filepath.Abs("./TestFileCopyStatusHandleSuccessCopy")
-// 	defer os.RemoveAll(osPath)
-// 	defer os.RemoveAll(osCopyPath)
-
-// 	network, _ := api.NewNetwork(config.Network)
-// 	host := network.LocalHost()
-// 	file := api.RemoteFile{Host: host, Info: api.FileInfo{FileName: "TestFileCopyStatusHandleSuccess.txt", FilePath: originalPath, FileType: api.FILE}}
-// 	err := file.Create(network.Transport())
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-
-// 	generated := generate(100)
-// 	err = file.Write(network.Transport(), generated)
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-
-// 	var task *api.RemoteTask
-// 	copyFile := api.RemoteFile{Host: host, Info: api.FileInfo{FileName: "TestFileCopyStatusHandleSuccessCopy.txt", FilePath: copyPath, FileType: api.FILE}}
-// 	task, err = file.CopyTo(network.Transport(), copyFile)
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-// 	if task == nil {
-// 		t.Fatal("task should be not nil")
-// 	}
-// 	if task.Status != api.Waiting {
-// 		t.Fatalf("status should be [%d]", api.Waiting)
-// 	}
-// 	time.Sleep(5 * time.Second)
-
-// 	task, err = host.Task(network.Transport(), task.Id)
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-// 	if task.Status != api.Completed {
-// 		t.Fatalf("status should be [%d], but status is [%d]", api.Completed, task.Status)
-// 	}
-// }
-
-// func TestFileCopyCancelHandleSuccess(t *testing.T) {
-// 	beforeEach()
-// 	defer afterEach()
-
-// 	originalPath := "testvolume:/TestFileCopyCancelHandleSuccess/TestFileCopyCancelHandleSuccess.txt"
-// 	copyPath := "testvolume:/TestFileCopyCancelHandleSuccessCopy/TestFileCopyCancelHandleSuccessCopy.txt"
-
-// 	osPath, _ := filepath.Abs("./testvolume/TestFileCopyCancelHandleSuccess")
-// 	osCopyPath, _ := filepath.Abs("./testvolume/TestFileCopyCancelHandleSuccessCopy")
-// 	defer os.RemoveAll(osPath)
-// 	defer os.RemoveAll(osCopyPath)
-
-// 	network, _ := api.NewNetwork(config.Network)
-// 	host := network.LocalHost()
-// 	file := api.RemoteFile{Host: host, Info: api.FileInfo{FileName: "TestFileCopyCancelHandleSuccess.txt", FilePath: originalPath, FileType: api.FILE}}
-// 	err := file.Create(network.Transport())
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-
-// 	generated := generate(100)
-// 	err = file.Write(network.Transport(), generated)
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-
-// 	var task *api.RemoteTask
-// 	copyFile := api.RemoteFile{Host: host, Info: api.FileInfo{FileName: "TestFileCopyCancelHandleSuccessCopy.txt", FilePath: copyPath, FileType: api.FILE}}
-// 	task, err = file.CopyTo(network.Transport(), copyFile)
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-
-// 	err = task.Cancel(network.Transport())
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-
-// 	task, _ = host.Task(network.Transport(), task.Id)
-// 	if task.Status != api.Cancelled {
-// 		t.Fatalf("status should be [%d], but status is [%d]", api.Cancelled, task.Status)
-// 	}
-
-// 	_, err = host.File(network.Transport(), copyFile.Info.FilePath)
-// 	if err == nil {
-// 		t.Fatal("error should be not nil, but err is nil")
-// 	}
-// }
-
-// func TestVolumeHandleSuccess(t *testing.T) {
-// 	beforeEach()
-// 	defer afterEach()
-
-// 	network, _ := api.NewNetwork(config.Network)
-// 	volumes, err := network.LocalHost().Volumes(network.Transport())
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-
-// 	if len(volumes) == 0 {
-// 		t.Fatal("volumes should be not empty")
-// 	}
-// }
-
-// func TestVolumeChildrenHandleSuccess(t *testing.T) {
-// 	beforeEach()
-// 	defer afterEach()
-
-// 	network, _ := api.NewNetwork(config.Network)
-// 	volumes, _ := network.LocalHost().Volumes(network.Transport())
-// 	children, err := volumes[0].Children(network.Transport(), 0, 100)
-// 	if err != nil {
-// 		t.Fatalf("error should be nil, but err is [%s]", err)
-// 	}
-
-// 	if len(children) == 0 {
-// 		t.Fatal("children should be not empty")
-// 	}
-// }
-
-// func generate(size int) []byte {
-// 	result := make([]byte, size)
-// 	for i := range size {
-// 		result[i] = byte(1)
-// 	}
-// 	return result
-// }
+	file.Remove(network.Transport())
+	fileCopy.Remove(network.Transport())
+}

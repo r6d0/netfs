@@ -114,8 +114,7 @@ func (vl *volume) ReIndex() error {
 					}
 				}
 
-				_, err := vl.Create(info)
-				return err
+				_, err = vl.Create(info)
 			}
 			return err
 		})

@@ -11,11 +11,11 @@ func TestVolumeChildrenSuccess(t *testing.T) {
 	beforeEach()
 	defer afterEach()
 
-	rec.Receive(api.Endpoints.Volume, func(transport.Request) ([]byte, any, error) {
-		return nil, []api.VolumeInfo{{Name: "testvolume", OsPath: "./", LocalPath: "testvolume:/"}}, nil
+	rec.Receive(api.Endpoints.Volume.Name, func(transport.Request) ([]byte, any, error) {
+		return nil, []api.VolumeInfo{{Name: "testvolume", OsPath: "./", LocalPath: "testvolume:/", Id: 1}}, nil
 	})
 	rec.Receive(api.Endpoints.VolumeChildren.Name, func(req transport.Request) ([]byte, any, error) {
-		if req.Param(api.Endpoints.VolumeChildren.VolumeId) != "testvolume" {
+		if req.Param(api.Endpoints.VolumeChildren.VolumeId) != "1" {
 			return nil, nil, errors.New("can't submit request")
 		}
 
@@ -46,7 +46,7 @@ func TestVolumeChildrenResponseError(t *testing.T) {
 	beforeEach()
 	defer afterEach()
 
-	rec.Receive(api.Endpoints.Volume, func(transport.Request) ([]byte, any, error) {
+	rec.Receive(api.Endpoints.Volume.Name, func(transport.Request) ([]byte, any, error) {
 		return nil, []api.VolumeInfo{{Name: "testvolume", OsPath: "./", LocalPath: "testvolume:/"}}, nil
 	})
 	rec.Receive(api.Endpoints.VolumeChildren.Name, func(transport.Request) ([]byte, any, error) {

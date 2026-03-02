@@ -44,7 +44,7 @@ func TestVolumesSuccess(t *testing.T) {
 	beforeEach()
 	defer afterEach()
 
-	rec.Receive(api.Endpoints.Volume, func(transport.Request) ([]byte, any, error) {
+	rec.Receive(api.Endpoints.Volume.Name, func(transport.Request) ([]byte, any, error) {
 		return nil, []api.VolumeInfo{{Name: "testvolume", OsPath: "./", LocalPath: "testvolume:/"}}, nil
 	})
 
@@ -63,7 +63,7 @@ func TestVolumesResponseError(t *testing.T) {
 	beforeEach()
 	defer afterEach()
 
-	rec.Receive(api.Endpoints.Volume, func(transport.Request) ([]byte, any, error) {
+	rec.Receive(api.Endpoints.Volume.Name, func(transport.Request) ([]byte, any, error) {
 		return nil, nil, errors.New("can't submit request")
 	})
 

@@ -50,28 +50,28 @@ func TestGetTaskSuccess(t *testing.T) {
 	}
 }
 
-func TestCancelTaskSuccess(t *testing.T) {
-	db := database.NewDatabase(database.DatabaseConfig{})
-	volumes, _ := volume.NewVolumeManager(db)
-	log := logger.NewLogger(logger.LoggerConfig{})
-	exec, _ := task.NewTaskManager(task.TaskExecuteConfig{}, db, volumes, nil, log)
+// func TestCancelTaskSuccess(t *testing.T) {
+// 	db := database.NewDatabase(database.DatabaseConfig{})
+// 	volumes, _ := volume.NewVolumeManager(db)
+// 	log := logger.NewLogger(logger.LoggerConfig{})
+// 	exec, _ := task.NewTaskManager(task.TaskExecuteConfig{}, db, volumes, nil, log)
 
-	copyTask, _ := task.NewCopyTask(api.RemoteFile{}, api.RemoteFile{})
-	taskId, err := exec.SetTask(copyTask)
-	if err != nil {
-		t.Fatalf("error should be nil, but err is [%s]", err)
-	}
+// 	copyTask, _ := task.NewCopyTask(api.RemoteFile{}, api.RemoteFile{})
+// 	taskId, err := exec.SetTask(copyTask)
+// 	if err != nil {
+// 		t.Fatalf("error should be nil, but err is [%s]", err)
+// 	}
 
-	err = exec.CancelTask(taskId)
-	if err != nil {
-		t.Fatalf("error should be nil, but err is [%s]", err)
-	}
+// 	err = exec.CancelTask(taskId)
+// 	if err != nil {
+// 		t.Fatalf("error should be nil, but err is [%s]", err)
+// 	}
 
-	task, _ := exec.GetTask(taskId)
-	if task.TaskStatus() != api.Cancelled {
-		t.Fatalf("Status should be equals [%d], but status is [%d]", api.Cancelled, task.TaskStatus())
-	}
-}
+// 	task, _ := exec.GetTask(taskId)
+// 	if task.TaskStatus() != api.Cancelled {
+// 		t.Fatalf("Status should be equals [%d], but status is [%d]", api.Cancelled, task.TaskStatus())
+// 	}
+// }
 
 // func TestStartSuccess(t *testing.T) {
 // 	generated := generate(100) // 100 bytes

@@ -14,9 +14,25 @@ type RemoteHost struct {
 	IP   net.IP
 }
 
+// The function returns the volume by identifier.
+func (host RemoteHost) Volume(client transport.TransportSender, volumeId uint64) (*RemoteVolume, error) {
+	params := []string{Endpoints.Volume.VolumeId, strconv.FormatUint(volumeId, decimalBase)}
+	req, err := client.NewRequest(host.IP, Endpoints.Volume.Name, params, nil, nil)
+	if err == nil {
+		var res transport.Response
+		if res, err = client.Send(req); err == nil {
+			volumes := []VolumeInfo{}
+			if _, err = res.Body(&volumes); err == nil {
+				return &RemoteVolume{Info: volumes[0], Host: host}, nil
+			}
+		}
+	}
+	return nil, err
+}
+
 // The function returns volumes of the host.
 func (host RemoteHost) Volumes(client transport.TransportSender) ([]RemoteVolume, error) {
-	req, err := client.NewRequest(host.IP, Endpoints.Volume, nil, nil, nil)
+	req, err := client.NewRequest(host.IP, Endpoints.Volume.Name, nil, nil, nil)
 	if err == nil {
 		var res transport.Response
 		if res, err = client.Send(req); err == nil {

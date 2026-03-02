@@ -21,9 +21,9 @@ type FileViewItem struct {
 	File *api.RemoteFile
 }
 
-func (item FileViewItem) Title() string       { return item.File.Info.FileName }
-func (item FileViewItem) Description() string { return item.File.Info.FilePath }
-func (item FileViewItem) FilterValue() string { return item.File.Info.FileName }
+func (item FileViewItem) Title() string       { return item.File.Info.Name }
+func (item FileViewItem) Description() string { return item.File.Info.Path }
+func (item FileViewItem) FilterValue() string { return item.File.Info.Name }
 
 type FileViewVolumeItem struct {
 	Volume *api.RemoteVolume
@@ -57,7 +57,7 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			item := model.list.SelectedItem()
 			if fileItem, ok := item.(*FileViewItem); ok {
 				file := fileItem.File
-				if file.Info.FileType == api.DIRECTORY {
+				if file.Info.Type == api.DIRECTORY {
 					prev := FileViewHistoryNode{Item: item, Prev: model.prev}
 					model.prev = &prev
 					cmd = model.resolveFileChildren(file)
@@ -96,7 +96,7 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmd = func() tea.Msg {
 					item := model.prev.Item
 					if fileItem, ok := item.(*FileViewItem); ok {
-						parent = fileItem.File.Info.FilePath
+						parent = fileItem.File.Info.Path
 					} else if volumeItem, ok := item.(*FileViewVolumeItem); ok {
 						parent = volumeItem.Volume.Info.LocalPath
 					}
@@ -107,10 +107,10 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						api.RemoteFile{
 							Host: *model.host,
 							Info: api.FileInfo{
-								FileName: file.Info.FileName,
-								FilePath: parent + file.Info.FileName,
-								FileType: file.Info.FileType,
-								FileSize: file.Info.FileSize,
+								Name: file.Info.Name,
+								Path: parent + file.Info.Name,
+								Type: file.Info.Type,
+								Size: file.Info.Size,
 							},
 						},
 					)

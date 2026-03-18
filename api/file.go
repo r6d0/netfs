@@ -3,7 +3,10 @@ package api
 import (
 	"netfs/api/transport"
 	"strconv"
+	"strings"
 )
+
+var units = [5]string{"B", "KB", "MB", "GB", "TB"}
 
 // Type of file.
 type FileType byte
@@ -21,13 +24,37 @@ func (fileType FileType) String() string {
 	return "d"
 }
 
+// Size of the file.
+type FileSize uint64
+
+// String representation of file size.
+func (fileSize FileSize) String() string {
+	size := uint64(fileSize)
+	if size == 0 {
+		return "0"
+	} else {
+		unit := 0
+		for unit < len(units) && size >= 1024 {
+			size /= 1024
+			unit++
+		}
+		return strings.Join(
+			[]string{
+				strconv.FormatUint(size, decimalBase),
+				units[unit],
+			},
+			" ",
+		)
+	}
+}
+
 // Information about file.
 type FileInfo struct {
 	Id       uint64
 	Name     string
 	Path     string
 	Type     FileType
-	Size     uint64
+	Size     FileSize
 	ParentId uint64
 	VolumeId uint64
 }

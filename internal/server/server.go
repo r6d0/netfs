@@ -49,7 +49,7 @@ func (srv *Server) Start() error {
 	srv.receiver.Receive(api.Endpoints.VolumeChildren.Name, srv.VolumeChildrenHandle)
 
 	// TODO. Remove it, for test only
-	path, _ := filepath.Abs("./data")
+	path, _ := filepath.Abs("D:/andrey/documents")
 	vl, _ := srv.volumes.Create(api.VolumeInfo{Name: "Test", LocalPath: "test:/", OsPath: path})
 	vl.ReIndex()
 

@@ -30,19 +30,17 @@ type ResizeMsg struct {
 type ConsoleView struct {
 	hostsView    tea.Model
 	fileView     tea.Model
-	infoView     tea.Model
 	activeView   ConsoleActiveView
 	defaultStyle lipgloss.Style
 }
 
 func (model ConsoleView) Init() tea.Cmd {
-	return tea.Sequence(model.hostsView.Init(), model.fileView.Init(), model.infoView.Init())
+	return tea.Sequence(model.hostsView.Init(), model.fileView.Init())
 }
 
 func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var hostViewCmd tea.Cmd
 	var fileViewCmd tea.Cmd
-	var infoViewCmd tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -81,22 +79,17 @@ func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// TODO. from settings?
 		hostViewWidth := (width / 100.0) * 30.0
 		fileViewWidth := int(width - hostViewWidth)
-		fileViewHeight := (height / 100.0) * 80.0
-		infoViewHeight := (height / 100.0) * 20.0
-		hostViewHeight := int(fileViewHeight) + int(infoViewHeight)
 
-		model.hostsView, hostViewCmd = model.hostsView.Update(ResizeMsg{Width: int(hostViewWidth), Height: hostViewHeight})
-		model.fileView, fileViewCmd = model.fileView.Update(ResizeMsg{Width: fileViewWidth, Height: int(fileViewHeight)})
-		model.infoView, infoViewCmd = model.infoView.Update(ResizeMsg{Width: fileViewWidth, Height: int(infoViewHeight)})
+		model.hostsView, hostViewCmd = model.hostsView.Update(ResizeMsg{Width: int(hostViewWidth), Height: int(height)})
+		model.fileView, fileViewCmd = model.fileView.Update(ResizeMsg{Width: fileViewWidth, Height: int(height)})
 	default:
 		model.hostsView, hostViewCmd = model.hostsView.Update(msg)
 		model.fileView, fileViewCmd = model.fileView.Update(msg)
-		model.infoView, infoViewCmd = model.infoView.Update(msg)
 
-		return model, tea.Sequence(hostViewCmd, fileViewCmd, infoViewCmd)
+		return model, tea.Sequence(hostViewCmd, fileViewCmd)
 	}
 
-	return model, tea.Sequence(hostViewCmd, fileViewCmd, infoViewCmd)
+	return model, tea.Sequence(hostViewCmd, fileViewCmd)
 }
 
 func (model ConsoleView) View() string {
@@ -105,11 +98,7 @@ func (model ConsoleView) View() string {
 		lipgloss.JoinHorizontal(
 			lipgloss.Top,
 			model.hostsView.View(),
-			lipgloss.JoinVertical(
-				lipgloss.Top,
-				model.fileView.View(),
-				model.infoView.View(),
-			),
+			model.fileView.View(),
 		),
 	)
 }
@@ -119,5 +108,5 @@ func NewConsoleViewModel(network *api.Network) tea.Model {
 		NewStyle().
 		Align(lipgloss.Left, lipgloss.Left)
 
-	return ConsoleView{hostsView: NewHostView(network), fileView: NewFileView(network), infoView: NewInfoView(), activeView: Host, defaultStyle: defaultStyle}
+	return ConsoleView{hostsView: NewHostView(network), fileView: NewFileView(network), activeView: Host, defaultStyle: defaultStyle}
 }

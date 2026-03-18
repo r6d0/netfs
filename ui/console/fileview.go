@@ -1,12 +1,22 @@
 package console
 
 import (
+	"io"
 	"netfs/api"
+	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+const COUNT_MAX_LEN = 5
+const COLUMN_TYPE_WIDTH = 5
+const COLUMN_SIZE_WIDTH = 15
+const TOO_LONG_LINE_POSTFIX = "..."
+
+var TOO_LONG_LINE_POSTFIX_WIDTH = lipgloss.Width(TOO_LONG_LINE_POSTFIX)
 
 type UpdateFilesMsg struct {
 	Items []list.Item
@@ -33,13 +43,134 @@ func (item FileViewVolumeItem) Title() string       { return item.Volume.Info.Na
 func (item FileViewVolumeItem) Description() string { return item.Volume.Info.OsPath }
 func (item FileViewVolumeItem) FilterValue() string { return item.Volume.Info.Name }
 
+type FileViewItemDelegate struct {
+	headerStyle       lipgloss.Style
+	footerStyle       lipgloss.Style
+	columnTypeStyle   lipgloss.Style
+	columnNameStyle   lipgloss.Style
+	columnSizeStyle   lipgloss.Style
+	itemStyle         lipgloss.Style
+	itemSelectedStyle lipgloss.Style
+}
+
+func (delegate FileViewItemDelegate) Render(writer io.Writer, model list.Model, index int, item list.Item) {
+	style := delegate.itemStyle
+	if model.Index() == index {
+		style = delegate.itemSelectedStyle
+	}
+
+	typeColumn := ""
+	nameColumn := ""
+	sizeColumn := ""
+
+	if volumeItem, ok := item.(*FileViewVolumeItem); ok {
+		typeColumn = "-"
+		nameColumn = volumeItem.Volume.Info.Name
+		sizeColumn = "-"
+	} else if fileItem, ok := item.(*FileViewItem); ok {
+		typeColumn = fileItem.File.Info.Type.String()
+		nameColumn = fileItem.File.Info.Name
+		sizeColumn = fileItem.File.Info.Size.String()
+	}
+
+	nameWidth := delegate.columnNameStyle.GetWidth()
+	if lipgloss.Width(nameColumn) > nameWidth {
+		nameColumn = lipgloss.
+			NewStyle().
+			MaxWidth(nameWidth-TOO_LONG_LINE_POSTFIX_WIDTH).
+			Render(nameColumn) + TOO_LONG_LINE_POSTFIX
+	}
+
+	writer.Write(
+		[]byte(
+			style.Render(
+				lipgloss.JoinHorizontal(
+					lipgloss.Left,
+					delegate.columnTypeStyle.Render(typeColumn),
+					delegate.columnNameStyle.Render(nameColumn),
+					delegate.columnSizeStyle.Render(sizeColumn),
+				),
+			),
+		),
+	)
+}
+
+func (FileViewItemDelegate) Height() int { return 1 }
+
+func (FileViewItemDelegate) Spacing() int { return 0 }
+
+func (FileViewItemDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
+	return nil
+}
+
+type FileViewHeader struct {
+	delegate *FileViewItemDelegate
+}
+
+func (*FileViewHeader) Init() tea.Cmd {
+	return nil
+}
+
+func (header *FileViewHeader) Update(tea.Msg) (tea.Model, tea.Cmd) {
+	return header, nil
+}
+
+func (header *FileViewHeader) View() string {
+	delegate := header.delegate
+	return delegate.headerStyle.Render(
+		lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			delegate.columnTypeStyle.Render("TYPE"),
+			delegate.columnNameStyle.Render("NAME"),
+			delegate.columnSizeStyle.Render("SIZE"),
+		),
+	)
+}
+
+type FileViewFooter struct {
+	count    int
+	delegate *FileViewItemDelegate
+}
+
+func (*FileViewFooter) Init() tea.Cmd {
+	return nil
+}
+
+func (footer *FileViewFooter) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case UpdateFilesMsg:
+		footer.count = len(msg.Items)
+	}
+
+	return footer, nil
+}
+
+func (footer *FileViewFooter) View() string {
+	delegate := footer.delegate
+
+	count := strconv.Itoa(footer.count)
+	countLen := len(count)
+	buffer := strings.Builder{}
+	buffer.WriteString("COUNT: ")
+	for countLen < COUNT_MAX_LEN {
+		countLen++
+		buffer.WriteString(" ")
+	}
+	buffer.WriteString(count)
+
+	return delegate.footerStyle.Render(buffer.String())
+}
+
 type FileView struct {
-	list    list.Model
-	style   lipgloss.Style
-	prev    *FileViewHistoryNode
-	host    *api.RemoteHost
-	network *api.Network
-	toCopy  *api.RemoteFile
+	header   tea.Model
+	footer   tea.Model
+	list     list.Model
+	delegate *FileViewItemDelegate
+	style    lipgloss.Style
+	prev     *FileViewHistoryNode
+	host     *api.RemoteHost
+	network  *api.Network
+	toCopy   *api.RemoteFile
 }
 
 func (model FileView) Init() tea.Cmd {
@@ -133,33 +264,75 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Width(width).
 			Height(height)
 
-		model.list.SetSize(width, height)
+		delegate := model.delegate
+		delegate.headerStyle = delegate.headerStyle.Width(width)
+		delegate.footerStyle = delegate.footerStyle.Width(width)
+		delegate.columnTypeStyle = delegate.columnTypeStyle.Width(COLUMN_TYPE_WIDTH)
+		delegate.columnNameStyle = delegate.columnNameStyle.Width(width - (COLUMN_TYPE_WIDTH + COLUMN_SIZE_WIDTH))
+		delegate.columnSizeStyle = delegate.columnSizeStyle.Width(COLUMN_SIZE_WIDTH)
+		delegate.itemStyle = delegate.itemStyle.Width(width)
+		delegate.itemSelectedStyle = delegate.itemSelectedStyle.Width(width)
+
+		headerSize := lipgloss.Height(model.header.View())
+		footerSize := lipgloss.Height(model.footer.View())
+		model.list.SetSize(width, height-headerSize-footerSize)
 	}
+
+	var headerCmd tea.Cmd
+	model.header, headerCmd = model.header.Update(msg)
+
+	var footerCmd tea.Cmd
+	model.footer, footerCmd = model.footer.Update(msg)
 
 	var listCmd tea.Cmd
 	model.list, listCmd = model.list.Update(msg)
-	return model, tea.Sequence(cmd, listCmd)
+	return model, tea.Sequence(cmd, headerCmd, footerCmd, listCmd)
 }
 
 func (model FileView) View() string {
-	return model.style.Render(model.list.View())
+	return model.style.Render(
+		lipgloss.JoinVertical(
+			lipgloss.Left,
+			model.header.View(),
+			model.list.View(),
+			model.footer.View(),
+		),
+	)
 }
 
 func NewFileView(network *api.Network) tea.Model {
-	lst := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
+	delegate := &FileViewItemDelegate{
+		headerStyle:       lipgloss.NewStyle().Height(1).BorderForeground(lipgloss.Color("#ffffff")).BorderStyle(lipgloss.NormalBorder()).BorderBottom(true),
+		footerStyle:       lipgloss.NewStyle().AlignHorizontal(lipgloss.Right).Height(1).BorderForeground(lipgloss.Color("#ffffff")).BorderStyle(lipgloss.NormalBorder()).BorderTop(true),
+		columnTypeStyle:   lipgloss.NewStyle().AlignHorizontal(lipgloss.Left),
+		columnNameStyle:   lipgloss.NewStyle().AlignHorizontal(lipgloss.Left),
+		columnSizeStyle:   lipgloss.NewStyle().AlignHorizontal(lipgloss.Right),
+		itemStyle:         lipgloss.NewStyle(),
+		itemSelectedStyle: lipgloss.NewStyle().Background(lipgloss.Color("#3b82f6")),
+	}
+
+	lst := list.New([]list.Item{}, delegate, 0, 0)
 	lst.DisableQuitKeybindings()
 	lst.SetShowFilter(false)
 	lst.SetShowHelp(false)
 	lst.SetShowTitle(false)
 	lst.SetShowStatusBar(false)
+	lst.SetShowPagination(false)
 
 	style := lipgloss.
 		NewStyle().
 		Align(lipgloss.Left, lipgloss.Left).
-		BorderForeground(lipgloss.Color("ff")).
+		BorderForeground(lipgloss.Color("#ffffff")).
 		BorderStyle(lipgloss.NormalBorder())
 
-	return FileView{list: lst, style: style, network: network}
+	return FileView{
+		header:   &FileViewHeader{delegate: delegate},
+		footer:   &FileViewFooter{delegate: delegate},
+		list:     lst,
+		delegate: delegate,
+		style:    style,
+		network:  network,
+	}
 }
 
 func (model FileView) resolveFileChildren(file *api.RemoteFile) tea.Cmd {

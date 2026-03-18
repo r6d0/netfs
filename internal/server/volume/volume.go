@@ -92,8 +92,10 @@ func (vl *volume) ReIndex() error {
 		err = filepath.WalkDir(vl.info.OsPath, func(path string, dir fs.DirEntry, err error) error {
 			path = NormalizePath(path, dir.IsDir())
 			if path != vl.info.OsPath {
+				record := table.New() // TODO. Use only record without api.FileInfo.
+
 				local := vl.ResolveLocalPath(path)
-				info := &api.FileInfo{Id: vl.info.Id, Path: local, Name: dir.Name(), VolumeId: vl.info.Id}
+				info := &api.FileInfo{Id: record.GetRecordId(), Path: local, Name: dir.Name(), VolumeId: vl.info.Id}
 
 				for !strings.HasPrefix(local, current.Path) {
 					current = stack.Pop()
@@ -110,11 +112,20 @@ func (vl *volume) ReIndex() error {
 
 					var fsInfo fs.FileInfo
 					if fsInfo, err = dir.Info(); err == nil {
-						info.Size = uint64(fsInfo.Size()) // TODO. Use uint64(fsInfo.Size())
+						info.Size = api.FileSize(fsInfo.Size())
 					}
 				}
 
-				_, err = vl.Create(info)
+				if err == nil {
+					record.SetString(FileName, info.Name)
+					record.SetString(FilePath, path)
+					record.SetUint64(FileSize, uint64(info.Size))
+					record.SetUint8(FileType, uint8(info.Type))
+					record.SetUint64(FileParentId, info.ParentId)
+					record.SetUint64(FileVolumeId, info.VolumeId)
+
+					err = table.Set(record)
+				}
 			}
 			return err
 		})
@@ -135,7 +146,7 @@ func (vl *volume) File(fileId uint64) (*api.FileInfo, error) {
 			Name:     record.GetString(FileName),
 			Path:     record.GetString(FilePath),
 			Type:     api.FileType(record.GetUint8(FileType)),
-			Size:     record.GetUint64(FileSize),
+			Size:     api.FileSize(record.GetUint64(FileSize)),
 			ParentId: record.GetUint64(FileParentId),
 			VolumeId: vl.info.Id,
 		}, nil
@@ -159,7 +170,7 @@ func (vl *volume) Children(fileId uint64, skip int, limit int) ([]api.FileInfo, 
 				Name:     record.GetString(FileName),
 				Path:     record.GetString(FilePath),
 				Type:     api.FileType(record.GetUint8(FileType)),
-				Size:     record.GetUint64(FileSize),
+				Size:     api.FileSize(record.GetUint64(FileSize)),
 				ParentId: record.GetUint64(FileParentId),
 				VolumeId: vl.info.Id,
 			}
@@ -195,7 +206,7 @@ func (vl *volume) Create(info *api.FileInfo) (*api.FileInfo, error) {
 			record := table.New()
 			record.SetString(FileName, info.Name)
 			record.SetString(FilePath, path)
-			record.SetUint64(FileSize, info.Size)
+			record.SetUint64(FileSize, uint64(info.Size))
 			record.SetUint8(FileType, uint8(info.Type))
 			record.SetUint64(FileParentId, info.ParentId)
 			record.SetUint64(FileVolumeId, info.VolumeId)

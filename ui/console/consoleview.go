@@ -22,20 +22,34 @@ const (
 	File
 )
 
+// The event sends after changing the terminal size.
 type ResizeMsg struct {
 	Width  int
 	Height int
 }
 
+// The event sends every N seconds.
+type RefreshMsg struct{}
+
+// The event sends after switching to another view.
+type ChangeActiveView struct {
+	View ConsoleActiveView
+}
+
+// The main view of the UI.
 type ConsoleView struct {
-	hostsView    tea.Model
-	fileView     tea.Model
-	activeView   ConsoleActiveView
-	defaultStyle lipgloss.Style
+	hostsView  tea.Model
+	fileView   tea.Model
+	activeView ConsoleActiveView
+	style      lipgloss.Style
 }
 
 func (model ConsoleView) Init() tea.Cmd {
-	return tea.Sequence(model.hostsView.Init(), model.fileView.Init())
+	return tea.Sequence(
+		model.hostsView.Init(),
+		model.fileView.Init(),
+		func() tea.Msg { return ChangeActiveView{View: Host} },
+	)
 }
 
 func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -44,6 +58,15 @@ func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		switch msg.String() {
+		case QuitKeyMsg:
+			return model, tea.Quit
+		case HostActiveKeyMsg:
+			return model, func() tea.Msg { return ChangeActiveView{View: Host} }
+		case FileActiveKeyMsg:
+			return model, func() tea.Msg { return ChangeActiveView{View: File} }
+		}
+
 		switch model.activeView {
 		case Host:
 			model.hostsView, hostViewCmd = model.hostsView.Update(msg)
@@ -51,28 +74,22 @@ func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			model.fileView, fileViewCmd = model.fileView.Update(msg)
 		}
 
-		switch msg.String() {
-		case QuitKeyMsg:
-			return model, tea.Quit
-		case HostActiveKeyMsg:
+	case ChangeActiveView:
+		switch msg.View {
+		case Host:
 			model.activeView = Host
-			return model, nil
-		case FileActiveKeyMsg:
+		case File:
 			model.activeView = File
-			return model, nil
 		}
-
-	case UpdateFilesMsg:
-		model.activeView = File
+		model.hostsView, hostViewCmd = model.hostsView.Update(msg)
 		model.fileView, fileViewCmd = model.fileView.Update(msg)
-		return model, nil
 
 	case tea.WindowSizeMsg:
-		frameX, frameY := model.defaultStyle.GetFrameSize()
+		frameX, frameY := model.style.GetFrameSize()
 		width := float32(msg.Width - frameX)
 		height := float32(msg.Height - frameY)
-		model.defaultStyle = model.
-			defaultStyle.
+		model.style = model.
+			style.
 			Width(int(width)).
 			Height(int(height))
 
@@ -93,8 +110,7 @@ func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (model ConsoleView) View() string {
-	// return ""
-	return model.defaultStyle.Render(
+	return model.style.Render(
 		lipgloss.JoinHorizontal(
 			lipgloss.Top,
 			model.hostsView.View(),
@@ -103,10 +119,11 @@ func (model ConsoleView) View() string {
 	)
 }
 
+// The function returns new instance of ConsoleView.
 func NewConsoleViewModel(network *api.Network) tea.Model {
-	defaultStyle := lipgloss.
+	style := lipgloss.
 		NewStyle().
 		Align(lipgloss.Left, lipgloss.Left)
 
-	return ConsoleView{hostsView: NewHostView(network), fileView: NewFileView(network), activeView: Host, defaultStyle: defaultStyle}
+	return ConsoleView{hostsView: NewHostView(network), fileView: NewFileView(network), style: style}
 }

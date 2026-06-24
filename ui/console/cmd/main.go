@@ -73,6 +73,12 @@ func main() {
 	network, err := api.NewNetwork(api.NetworkConfig{Port: 8989, Protocol: transport.HTTP, Timeout: time.Second * 1})
 	if err == nil {
 		program := tea.NewProgram(console.NewConsoleViewModel(network), tea.WithAltScreen())
+
+		go func(program *tea.Program) {
+			time.Sleep(3 * time.Second) // TODO. from settings
+			program.Send(console.RefreshMsg{})
+		}(program)
+
 		_, err = program.Run()
 	}
 

@@ -22,13 +22,13 @@ func TestCancelSuccess(t *testing.T) {
 
 			w.Write(data)
 		})
-		mux.HandleFunc(api.Endpoints.FileCopyStop.Name, func(w http.ResponseWriter, r *http.Request) {})
+		mux.HandleFunc(api.Endpoints.FileCopyCancel.Name, func(w http.ResponseWriter, r *http.Request) {})
 		http.ListenAndServe(":"+strconv.Itoa(int(config.Port)), mux)
 	}()
 	time.Sleep(2 * time.Second)
 
 	host, _ := network.Host(local.IP)
-	task := api.RemoteTask{Id: 1, Status: api.Waiting, Host: *host}
+	task := api.RemoteCopyTask{Id: api.TaskId("1"), Status: api.Running, Host: *host}
 	err := task.Cancel(network.Transport())
 	if err != nil {
 		t.Fatalf("error should be nil, but error is [%s]", err)

@@ -3,7 +3,6 @@ package api
 import (
 	"net"
 	"netfs/api/transport"
-	"strconv"
 )
 
 const rootDirectory = "/"
@@ -14,35 +13,38 @@ type RemoteHost struct {
 	IP   net.IP
 }
 
-// The function returns the volume by identifier.
-func (host RemoteHost) Volume(client transport.TransportSender, volumeId uint64) (*RemoteVolume, error) {
-	params := []string{Endpoints.Volume.VolumeId, strconv.FormatUint(volumeId, decimalBase)}
-	req, err := client.NewRequest(host.IP, Endpoints.Volume.Name, params, nil, nil)
+// The function returns the root directory of the remote host.
+func (host *RemoteHost) Root() *RemoteFile {
+	return &RemoteFile{Host: *host, Info: FileInfo{Id: rootDirectory, Path: rootDirectory}}
+}
+
+// The function creates a file or directory on the remote host.
+func (host *RemoteHost) Create(client transport.TransportSender, info FileInfo) (*RemoteFile, error) {
+	req, err := client.NewRequest(host.IP, Endpoints.FileCreate, nil, nil, info)
 	if err == nil {
 		var res transport.Response
 		if res, err = client.Send(req); err == nil {
-			volumes := []VolumeInfo{}
-			if _, err = res.Body(&volumes); err == nil {
-				return &RemoteVolume{Info: volumes[0], Host: host}, nil
+			info := &FileInfo{}
+			if _, err = res.Body(info); err == nil {
+				return &RemoteFile{Info: *info, Host: *host}, nil
 			}
 		}
 	}
 	return nil, err
 }
 
-// The function returns volumes of the host.
-func (host RemoteHost) Volumes(client transport.TransportSender) ([]RemoteVolume, error) {
-	req, err := client.NewRequest(host.IP, Endpoints.Volume.Name, nil, nil, nil)
+// The function returns information about a file by id.
+func (host *RemoteHost) File(client transport.TransportSender, fileId FileId) (*RemoteFile, error) {
+	params := []string{
+		Endpoints.FileInfo.FileId, string(fileId),
+	}
+	req, err := client.NewRequest(host.IP, Endpoints.FileInfo.Name, params, nil, nil)
 	if err == nil {
 		var res transport.Response
 		if res, err = client.Send(req); err == nil {
-			volumes := []VolumeInfo{}
-			if _, err = res.Body(&volumes); err == nil {
-				result := make([]RemoteVolume, len(volumes))
-				for index, volume := range volumes {
-					result[index] = RemoteVolume{Info: volume, Host: host}
-				}
-				return result, nil
+			info := &FileInfo{}
+			if _, err = res.Body(info); err == nil {
+				return &RemoteFile{Info: *info, Host: *host}, nil
 			}
 		}
 	}
@@ -50,14 +52,14 @@ func (host RemoteHost) Volumes(client transport.TransportSender) ([]RemoteVolume
 }
 
 // The function returns information about a task by id.
-func (host RemoteHost) Task(client transport.TransportSender, taskId int) (*RemoteTask, error) {
-	params := []string{Endpoints.FileCopyStatus.TaskId, strconv.Itoa(taskId)}
+func (host RemoteHost) Task(client transport.TransportSender, taskId TaskId) (*RemoteCopyTask, error) {
+	params := []string{Endpoints.FileCopyStatus.TaskId, string(taskId)}
 	req, err := client.NewRequest(host.IP, Endpoints.FileCopyStatus.Name, params, nil, nil)
 
 	if err == nil {
 		var res transport.Response
 		if res, err = client.Send(req); err == nil {
-			task := &RemoteTask{}
+			task := &RemoteCopyTask{}
 			if _, err = res.Body(task); err == nil {
 				return task, nil
 			}

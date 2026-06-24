@@ -12,7 +12,7 @@ var units = [5]string{"B", "KB", "MB", "GB", "TB"}
 type FileType byte
 
 const (
-	FILE FileType = iota
+	FILE FileType = 1 << iota
 	DIRECTORY
 )
 
@@ -25,11 +25,11 @@ func (fileType FileType) String() string {
 }
 
 // Size of the file.
-type FileSize uint64
+type FileSize int64
 
 // String representation of file size.
 func (fileSize FileSize) String() string {
-	size := uint64(fileSize)
+	size := int64(fileSize)
 	if size == 0 {
 		return "0"
 	} else {
@@ -40,7 +40,7 @@ func (fileSize FileSize) String() string {
 		}
 		return strings.Join(
 			[]string{
-				strconv.FormatUint(size, decimalBase),
+				strconv.FormatInt(size, decimalBase),
 				units[unit],
 			},
 			" ",
@@ -48,30 +48,29 @@ func (fileSize FileSize) String() string {
 	}
 }
 
+// File identifier.
+type FileId string
+
 // Information about file.
 type FileInfo struct {
-	Id       uint64
+	Id       FileId
 	Name     string
 	Path     string
 	Type     FileType
 	Size     FileSize
-	ParentId uint64
-	VolumeId uint64
+	ParentId FileId
 }
 
 // File on a remote host.
 type RemoteFile struct {
-	Host RemoteHost
 	Info FileInfo
+	Host RemoteHost
 }
 
 // Returns children of the directory.
-func (file *RemoteFile) Children(client transport.TransportSender, skip int, limit int) ([]RemoteFile, error) {
+func (file *RemoteFile) Children(client transport.TransportSender) ([]RemoteFile, error) {
 	params := []string{
-		Endpoints.FileChildren.VolumeId, strconv.FormatUint(file.Info.VolumeId, decimalBase),
-		Endpoints.FileChildren.FileId, strconv.FormatUint(file.Info.Id, decimalBase),
-		Endpoints.FileChildren.Skip, strconv.Itoa(skip),
-		Endpoints.FileChildren.Limit, strconv.Itoa(limit),
+		Endpoints.FileChildren.FileId, string(file.Info.Id),
 	}
 
 	req, err := client.NewRequest(file.Host.IP, Endpoints.FileChildren.Name, params, nil, nil)
@@ -94,8 +93,7 @@ func (file *RemoteFile) Children(client transport.TransportSender, skip int, lim
 // Writes data to remote file.
 func (file *RemoteFile) Write(client transport.TransportSender, data []byte) error {
 	params := []string{
-		Endpoints.FileWrite.VolumeId, strconv.FormatUint(file.Info.VolumeId, decimalBase),
-		Endpoints.FileWrite.FileId, strconv.FormatUint(file.Info.Id, decimalBase),
+		Endpoints.FileWrite.FileId, string(file.Info.Id),
 	}
 	req, err := client.NewRequest(file.Host.IP, Endpoints.FileWrite.Name, params, data, nil)
 	if err == nil {
@@ -105,12 +103,13 @@ func (file *RemoteFile) Write(client transport.TransportSender, data []byte) err
 }
 
 // Copies the current file to the target file.
-func (file *RemoteFile) CopyTo(client transport.TransportSender, target RemoteFile) (*RemoteTask, error) {
-	req, err := client.NewRequest(file.Host.IP, Endpoints.FileCopyStart, nil, nil, []RemoteFile{*file, target})
+func (file *RemoteFile) CopyTo(client transport.TransportSender, target RemoteFile) (*RemoteCopyTask, error) {
+	task := &RemoteCopyTask{Source: *file, Target: target}
+
+	req, err := client.NewRequest(file.Host.IP, Endpoints.FileCopyStart, nil, nil, *task)
 	if err == nil {
 		var res transport.Response
 		if res, err = client.Send(req); err == nil {
-			task := &RemoteTask{}
 			if _, err = res.Body(task); err == nil {
 				return task, nil
 			}
@@ -122,8 +121,7 @@ func (file *RemoteFile) CopyTo(client transport.TransportSender, target RemoteFi
 // Removes the file from the remote host.
 func (file *RemoteFile) Remove(client transport.TransportSender) error {
 	params := []string{
-		Endpoints.FileRemove.VolumeId, strconv.FormatUint(file.Info.VolumeId, decimalBase),
-		Endpoints.FileRemove.FileId, strconv.FormatUint(file.Info.Id, decimalBase),
+		Endpoints.FileRemove.FileId, string(file.Info.Id),
 	}
 	req, err := client.NewRequest(file.Host.IP, Endpoints.FileRemove.Name, params, nil, nil)
 	if err == nil {

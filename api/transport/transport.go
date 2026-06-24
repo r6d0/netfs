@@ -8,11 +8,11 @@ import (
 	"time"
 )
 
-// Returns if the protocol is not supporting.
-var ErrUnsupportedProtocol = errors.New("unsupported protocol")
-
 // Returns if the response was unexpected.
 var ErrUnexpectedAnswer = errors.New("unexpected answer")
+
+// Returns if the protocol is not supporting.
+var ErrUnsupportedProtocol = errors.New("unsupported protocol")
 
 // Returns if required param not found.
 var ErrRequiredParam = errors.New("is required")

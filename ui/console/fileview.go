@@ -3,6 +3,7 @@ package console
 import (
 	"io"
 	"netfs/api"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -22,6 +23,22 @@ type UpdateFilesMsg struct {
 	Items []list.Item
 }
 
+type OpenCopyFileModalMsg struct {
+	File *api.RemoteFile
+}
+
+type CloseCopyFileModalMsg struct {
+	Action string
+}
+
+type OpenDeleteFileModalMsg struct {
+	File *api.RemoteFile
+}
+
+type CloseDeleteFileModalMsg struct {
+	Action string
+}
+
 type FileViewHistoryNode struct {
 	Item list.Item
 	Prev *FileViewHistoryNode
@@ -34,14 +51,6 @@ type FileViewItem struct {
 func (item FileViewItem) Title() string       { return item.File.Info.Name }
 func (item FileViewItem) Description() string { return item.File.Info.Path }
 func (item FileViewItem) FilterValue() string { return item.File.Info.Name }
-
-type FileViewVolumeItem struct {
-	Volume *api.RemoteVolume
-}
-
-func (item FileViewVolumeItem) Title() string       { return item.Volume.Info.Name }
-func (item FileViewVolumeItem) Description() string { return item.Volume.Info.OsPath }
-func (item FileViewVolumeItem) FilterValue() string { return item.Volume.Info.Name }
 
 type FileViewItemDelegate struct {
 	headerStyle       lipgloss.Style
@@ -59,20 +68,8 @@ func (delegate FileViewItemDelegate) Render(writer io.Writer, model list.Model, 
 		style = delegate.itemSelectedStyle
 	}
 
-	typeColumn := ""
-	nameColumn := ""
-	sizeColumn := ""
-
-	if volumeItem, ok := item.(*FileViewVolumeItem); ok {
-		typeColumn = "-"
-		nameColumn = volumeItem.Volume.Info.Name
-		sizeColumn = "-"
-	} else if fileItem, ok := item.(*FileViewItem); ok {
-		typeColumn = fileItem.File.Info.Type.String()
-		nameColumn = fileItem.File.Info.Name
-		sizeColumn = fileItem.File.Info.Size.String()
-	}
-
+	fileItem := item.(*FileViewItem)
+	nameColumn := fileItem.File.Info.Name
 	nameWidth := delegate.columnNameStyle.GetWidth()
 	if lipgloss.Width(nameColumn) > nameWidth {
 		nameColumn = lipgloss.
@@ -86,9 +83,9 @@ func (delegate FileViewItemDelegate) Render(writer io.Writer, model list.Model, 
 			style.Render(
 				lipgloss.JoinHorizontal(
 					lipgloss.Left,
-					delegate.columnTypeStyle.Render(typeColumn),
+					delegate.columnTypeStyle.Render(fileItem.File.Info.Type.String()),
 					delegate.columnNameStyle.Render(nameColumn),
-					delegate.columnSizeStyle.Render(sizeColumn),
+					delegate.columnSizeStyle.Render(fileItem.File.Info.Size.String()),
 				),
 			),
 		),
@@ -164,6 +161,7 @@ func (footer *FileViewFooter) View() string {
 type FileView struct {
 	header   tea.Model
 	footer   tea.Model
+	modal    tea.Model
 	list     list.Model
 	delegate *FileViewItemDelegate
 	style    lipgloss.Style
@@ -179,82 +177,89 @@ func (model FileView) Init() tea.Cmd {
 
 func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+	var headerCmd tea.Cmd
+	var footerCmd tea.Cmd
+	var listCmd tea.Cmd
+	var modalCmd tea.Cmd
 
+	modal := model.modal.(*Modal)
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.Type {
-		// Enter to the selected directory.
-		case tea.KeyEnter: // TODO. from settings?
-			item := model.list.SelectedItem()
-			if fileItem, ok := item.(*FileViewItem); ok {
-				file := fileItem.File
+		if !modal.GetVisibled() {
+			switch msg.Type {
+			// Enter to the selected directory.
+			case tea.KeyEnter: // TODO. from settings?
+				item := model.list.SelectedItem()
+				file := item.(*FileViewItem).File
 				if file.Info.Type == api.DIRECTORY {
 					prev := FileViewHistoryNode{Item: item, Prev: model.prev}
 					model.prev = &prev
 					cmd = model.resolveFileChildren(file)
 				}
-			} else if volumeItem, ok := item.(*FileViewVolumeItem); ok {
-				prev := FileViewHistoryNode{Item: item, Prev: model.prev}
-				model.prev = &prev
-				cmd = model.resolveVolumeChildren(volumeItem.Volume)
-			}
-		case tea.KeyBackspace: // TODO. from settings?
-			// Exit to the root directory of the selected host.
-			if msg.Alt {
-				cmd = func() tea.Msg { return UpdateHostMsg{Host: model.host} }
-				// Exit from the selected directory.
-			} else if model.prev.Prev != nil {
-				model.prev = model.prev.Prev
-				item := model.prev.Item
-				if item == nil {
-					cmd = func() tea.Msg { return UpdateHostMsg{Host: model.host} }
-				} else if fileItem, ok := item.(*FileViewItem); ok {
-					cmd = model.resolveFileChildren(fileItem.File)
-				} else if volumeItem, ok := item.(*FileViewVolumeItem); ok {
-					cmd = model.resolveVolumeChildren(volumeItem.Volume)
-				}
-			}
-		// Marks the file for copying.
-		case tea.KeyCtrlC:
-			item := model.list.SelectedItem()
-			if _, ok := item.(*FileViewItem); ok {
-				model.toCopy = item.(*FileViewItem).File
-			}
-		// Starts the file copying.
-		case tea.KeyCtrlV:
-			if model.toCopy != nil && model.prev.Item != nil {
-				var parent string
-				cmd = func() tea.Msg {
+			case tea.KeyBackspace: // TODO. from settings?
+				// Exit to the root directory of the selected host.
+				if msg.Alt {
+					cmd = func() tea.Msg { return ChangeActiveHostMsg{Host: model.host} }
+					// Exit from the selected directory.
+				} else if model.prev.Prev != nil {
+					model.prev = model.prev.Prev
 					item := model.prev.Item
-					if fileItem, ok := item.(*FileViewItem); ok {
-						parent = fileItem.File.Info.Path
-					} else if volumeItem, ok := item.(*FileViewVolumeItem); ok {
-						parent = volumeItem.Volume.Info.LocalPath
+					if item == nil {
+						cmd = func() tea.Msg { return ChangeActiveHostMsg{Host: model.host} }
+					} else {
+						cmd = model.resolveFileChildren(item.(*FileViewItem).File)
 					}
-
-					file := model.toCopy
-					file.CopyTo( // TODO. show error.
-						model.network.Transport(),
-						api.RemoteFile{
-							Host: *model.host,
-							Info: api.FileInfo{
-								Name: file.Info.Name,
-								Path: parent + file.Info.Name,
-								Type: file.Info.Type,
-								Size: file.Info.Size,
-							},
-						},
-					)
-					return nil
+				}
+			// Marks the file for copying.
+			case tea.KeyCtrlC:
+				item := model.list.SelectedItem()
+				if _, ok := item.(*FileViewItem); ok {
+					model.toCopy = item.(*FileViewItem).File
+				}
+			// Starts the file copying.
+			case tea.KeyCtrlV:
+				if model.toCopy != nil && model.prev.Item != nil {
+					cmd = model.copyFile(false)
+				}
+			case tea.KeyDelete:
+				item := model.list.SelectedItem()
+				if _, ok := item.(*FileViewItem); ok {
+					cmd = func() tea.Msg {
+						return OpenDeleteFileModalMsg{File: item.(*FileViewItem).File}
+					}
 				}
 			}
 		}
-	case UpdateHostMsg:
+	case ChangeActiveHostMsg:
 		model.prev = &FileViewHistoryNode{}
 		model.host = msg.Host
-		cmd = model.resolveHostVolumes(msg.Host)
+		cmd = model.resolveFileChildren(msg.Host.Root())
 	case UpdateFilesMsg:
 		cmd = model.list.SetItems(msg.Items)
+	case OpenCopyFileModalMsg:
+		modal.SetVisibled(true)
+		modal.SetTitle("File " + lipgloss.NewStyle().Foreground(lipgloss.Color("#3b82f6")).Render(msg.File.Info.Name) + " already exists! Replace?")
+		modal.SetButtons([]ModalButton{
+			{"Yes(Y)", "Y", func() tea.Msg { return CloseCopyFileModalMsg{Action: "Yes"} }},
+			{"Cancel(C)", "C", func() tea.Msg { return CloseCopyFileModalMsg{Action: "Cancel"} }},
+		})
+	case CloseCopyFileModalMsg:
+		modal.SetVisibled(false)
+		if msg.Action == "Yes" {
+			cmd = model.copyFile(true)
+		}
+	case OpenDeleteFileModalMsg:
+		modal.SetVisibled(true)
+		modal.SetTitle("Delete file " + lipgloss.NewStyle().Foreground(lipgloss.Color("#3b82f6")).Render(msg.File.Info.Name) + "?")
+		modal.SetButtons([]ModalButton{
+			{"Yes(Y)", "Y", func() tea.Msg { return CloseDeleteFileModalMsg{Action: "Yes"} }},
+			{"Cancel(C)", "C", func() tea.Msg { return CloseDeleteFileModalMsg{Action: "Cancel"} }},
+		})
+	case CloseDeleteFileModalMsg:
+		modal.SetVisibled(false)
+		if msg.Action == "Yes" {
+			cmd = model.deleteFile()
+		}
 	case ResizeMsg:
 		frameX, frameY := model.style.GetFrameSize()
 		width := msg.Width - frameX
@@ -278,18 +283,26 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model.list.SetSize(width, height-headerSize-footerSize)
 	}
 
-	var headerCmd tea.Cmd
-	model.header, headerCmd = model.header.Update(msg)
-
-	var footerCmd tea.Cmd
-	model.footer, footerCmd = model.footer.Update(msg)
-
-	var listCmd tea.Cmd
-	model.list, listCmd = model.list.Update(msg)
-	return model, tea.Sequence(cmd, headerCmd, footerCmd, listCmd)
+	if !modal.GetVisibled() {
+		model.header, headerCmd = model.header.Update(msg)
+		model.footer, footerCmd = model.footer.Update(msg)
+		model.list, listCmd = model.list.Update(msg)
+	} else {
+		model.modal, modalCmd = model.modal.Update(msg)
+	}
+	return model, tea.Sequence(cmd, headerCmd, footerCmd, listCmd, modalCmd)
 }
 
 func (model FileView) View() string {
+	modal := model.modal.(*Modal)
+	if modal.GetVisibled() {
+		return model.
+			style.
+			AlignVertical(lipgloss.Center).
+			AlignHorizontal(lipgloss.Center).
+			Render(model.modal.View())
+	}
+
 	return model.style.Render(
 		lipgloss.JoinVertical(
 			lipgloss.Left,
@@ -301,7 +314,8 @@ func (model FileView) View() string {
 }
 
 func NewFileView(network *api.Network) tea.Model {
-	delegate := &FileViewItemDelegate{
+	view := FileView{network: network}
+	view.delegate = &FileViewItemDelegate{
 		headerStyle:       lipgloss.NewStyle().Height(1).BorderForeground(lipgloss.Color("#ffffff")).BorderStyle(lipgloss.NormalBorder()).BorderBottom(true),
 		footerStyle:       lipgloss.NewStyle().AlignHorizontal(lipgloss.Right).Height(1).BorderForeground(lipgloss.Color("#ffffff")).BorderStyle(lipgloss.NormalBorder()).BorderTop(true),
 		columnTypeStyle:   lipgloss.NewStyle().AlignHorizontal(lipgloss.Left),
@@ -310,35 +324,33 @@ func NewFileView(network *api.Network) tea.Model {
 		itemStyle:         lipgloss.NewStyle(),
 		itemSelectedStyle: lipgloss.NewStyle().Background(lipgloss.Color("#3b82f6")),
 	}
+	view.header = &FileViewHeader{delegate: view.delegate}
+	view.footer = &FileViewFooter{delegate: view.delegate}
 
-	lst := list.New([]list.Item{}, delegate, 0, 0)
+	lst := list.New([]list.Item{}, view.delegate, 0, 0)
 	lst.DisableQuitKeybindings()
 	lst.SetShowFilter(false)
 	lst.SetShowHelp(false)
 	lst.SetShowTitle(false)
 	lst.SetShowStatusBar(false)
 	lst.SetShowPagination(false)
+	view.list = lst
 
-	style := lipgloss.
+	view.style = lipgloss.
 		NewStyle().
 		Align(lipgloss.Left, lipgloss.Left).
 		BorderForeground(lipgloss.Color("#ffffff")).
 		BorderStyle(lipgloss.NormalBorder())
 
-	return FileView{
-		header:   &FileViewHeader{delegate: delegate},
-		footer:   &FileViewFooter{delegate: delegate},
-		list:     lst,
-		delegate: delegate,
-		style:    style,
-		network:  network,
-	}
+	view.modal = NewModal()
+
+	return view
 }
 
 func (model FileView) resolveFileChildren(file *api.RemoteFile) tea.Cmd {
 	return func() tea.Msg {
 		// TODO. Show error.
-		children, _ := file.Children(model.network.Transport(), 0, 100) // TODO. from settings?
+		children, _ := file.Children(model.network.Transport())
 		items := make([]list.Item, len(children))
 		for index, file := range children {
 			items[index] = &FileViewItem{File: &file}
@@ -347,10 +359,37 @@ func (model FileView) resolveFileChildren(file *api.RemoteFile) tea.Cmd {
 	}
 }
 
-func (model FileView) resolveVolumeChildren(volume *api.RemoteVolume) tea.Cmd {
+func (model FileView) copyFile(replace bool) tea.Cmd {
 	return func() tea.Msg {
-		// TODO. Show error.
-		children, _ := volume.Children(model.network.Transport(), 0, 100) // TODO. from settings?
+		client := model.network.Transport()
+		item := model.prev.Item.(*FileViewItem)
+		file := model.toCopy
+		path := filepath.Join(item.File.Info.Path, file.Info.Name)
+		target := api.RemoteFile{
+			Host: *model.host,
+			Info: api.FileInfo{
+				Id:   api.FileId(path),
+				Name: file.Info.Name,
+				Path: path,
+				Type: file.Info.Type,
+				Size: file.Info.Size,
+			},
+		}
+
+		var err error
+		if !replace {
+			_, err = model.host.File(client, api.FileId(target.Info.Path))
+			if err == nil { // File already exists.
+				return OpenCopyFileModalMsg{File: &target}
+			} else { // File not exists.
+				_, err = file.CopyTo(model.network.Transport(), target)
+			}
+		} else {
+			_, err = file.CopyTo(model.network.Transport(), target)
+		}
+
+		// TODO. it does not working!
+		children, _ := item.File.Children(model.network.Transport())
 		items := make([]list.Item, len(children))
 		for index, file := range children {
 			items[index] = &FileViewItem{File: &file}
@@ -359,14 +398,24 @@ func (model FileView) resolveVolumeChildren(volume *api.RemoteVolume) tea.Cmd {
 	}
 }
 
-func (model FileView) resolveHostVolumes(host *api.RemoteHost) tea.Cmd {
+func (model FileView) deleteFile() tea.Cmd {
 	return func() tea.Msg {
-		// TODO. Show error.
-		volumes, _ := host.Volumes(model.network.Transport())
-		items := make([]list.Item, len(volumes))
-		for index, file := range volumes {
-			items[index] = &FileViewVolumeItem{Volume: &file}
+		item := model.list.SelectedItem()
+		if _, ok := item.(*FileViewItem); ok {
+			file := item.(*FileViewItem).File
+			file.Remove(model.network.Transport())
+
+			item = model.prev.Item
+			if _, ok := item.(*FileViewItem); ok {
+				file = item.(*FileViewItem).File
+				children, _ := file.Children(model.network.Transport())
+				items := make([]list.Item, len(children))
+				for index, file := range children {
+					items[index] = &FileViewItem{File: &file}
+				}
+				return UpdateFilesMsg{Items: items}
+			}
 		}
-		return UpdateFilesMsg{Items: items}
+		return nil
 	}
 }

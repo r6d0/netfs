@@ -7,7 +7,7 @@ import (
 )
 
 const testVolumeId = 100
-const testFileId = 100
+const testFileId = api.FileId("100")
 const testFileName = "test_file.txt"
 
 // Do not use with t.Parallel(...)
@@ -26,9 +26,8 @@ func beforeEach() {
 		return nil, local, nil
 	})
 	rec.Receive(api.Endpoints.FileInfo.Name, func(req transport.Request) ([]byte, any, error) {
-		volumeId, err := req.ParamUInt64(api.Endpoints.FileInfo.VolumeId)
-		fileId, err := req.ParamUInt64(api.Endpoints.FileInfo.FileId)
-		return nil, api.FileInfo{Type: api.FILE, VolumeId: volumeId, Id: fileId}, err
+		fileId, err := req.ParamRequired(api.Endpoints.FileInfo.FileId)
+		return nil, api.FileInfo{Type: api.FILE, Id: api.FileId(fileId)}, err
 	})
 	rec.Start()
 }

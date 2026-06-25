@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
@@ -17,14 +18,64 @@ import (
 )
 
 const rootDirectory = "/"
+const defaultRoot = "./"
+const defaultPort = 8989
+const defaultTimeout = 2 * time.Second
+const defaultProtocol = transport.HTTP
+
+const DefaultConfigPath = "./netfs_config.json"
 
 var ErrFileAlreadyExists = errors.New("file already exists")
 var ErrTooManyActiveTasks = errors.New("too many active tasks")
+var ErrConfigIsEmpty = errors.New("configuration file is empty")
+
+// The netfs logging configuration.
+type ServerLogConfig struct {
+	Level slog.Level
+}
 
 // The netfs server configuration.
 type ServerConfig struct {
+	Path     string `json:"-"`
+	Log      ServerLogConfig
 	Network  api.NetworkConfig
 	RootList []string
+}
+
+// The function creates the default configuration.
+func NewServerConfig() *ServerConfig {
+	return &ServerConfig{
+		Path:     DefaultConfigPath,
+		Log:      ServerLogConfig{Level: slog.LevelInfo},
+		Network:  api.NetworkConfig{Port: defaultPort, Protocol: defaultProtocol, Timeout: defaultTimeout},
+		RootList: []string{defaultRoot},
+	}
+}
+
+// The function reads the configuration from the specified path.
+func ReadServerConfig(path string) (*ServerConfig, error) {
+	data, err := os.ReadFile(path)
+	if err == nil {
+		if len(data) == 0 {
+			err = ErrConfigIsEmpty
+		} else {
+			config := &ServerConfig{}
+			if err = json.Unmarshal(data, config); err == nil {
+				config.Path = path
+				return config, nil
+			}
+		}
+	}
+	return nil, err
+}
+
+// The function writes the configuration to the specified path.
+func WriteServerConfig(config *ServerConfig) (*ServerConfig, error) {
+	data, err := json.Marshal(config)
+	if err == nil {
+		err = os.WriteFile(config.Path, data, fs.ModePerm)
+	}
+	return config, err
 }
 
 // The netfs server.
@@ -68,8 +119,8 @@ func (srv *Server) Stop() error {
 }
 
 // New instance of the netfs server.
-func NewServer(config ServerConfig) (*Server, error) {
-	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+func NewServer(config *ServerConfig) (*Server, error) {
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: config.Log.Level}))
 	network, err := api.NewNetwork(config.Network)
 	if err == nil {
 		var receiver transport.TransportReceiver

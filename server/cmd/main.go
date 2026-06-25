@@ -1,20 +1,29 @@
 package main
 
 import (
-	"netfs/api"
-	"netfs/api/transport"
 	server "netfs/server/internal"
-	"time"
+	"os"
 )
 
 func main() {
-	config := server.ServerConfig{
-		Network:  api.NetworkConfig{Port: 8989, Protocol: transport.HTTP, Timeout: time.Second * 5},
-		RootList: []string{"c:/", "d:/"},
+	var config *server.ServerConfig
+	var err error
+
+	if len(os.Args) > 1 {
+		config, err = server.ReadServerConfig(os.Args[1])
 	}
 
-	srv, err := server.NewServer(config)
-	if err != nil {
+	if config == nil {
+		config, err = server.ReadServerConfig(server.DefaultConfigPath)
+	}
+
+	// Default configuration.
+	if config == nil {
+		config, err = server.WriteServerConfig(server.NewServerConfig())
+	}
+
+	var srv *server.Server
+	if srv, err = server.NewServer(config); err != nil {
 		panic(err)
 	}
 

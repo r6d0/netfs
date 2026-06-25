@@ -18,7 +18,7 @@ var srv *server.Server
 
 func beforeEach() {
 	var err error
-	srv, err = server.NewServer(config)
+	srv, err = server.NewServer(&config)
 	if err != nil {
 		panic(fmt.Sprintf("error should be nil, but err is [%s]", err))
 	}

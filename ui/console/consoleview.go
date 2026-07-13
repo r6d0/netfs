@@ -14,12 +14,14 @@ const AltBackspaceKeyMsg = "alt+backspace"
 const QuitKeyMsg = "alt+q"
 const HostActiveKeyMsg = "alt+h"
 const FileActiveKeyMsg = "alt+f"
+const TaskActiveKeyMsg = "alt+t"
 
 type ConsoleActiveView uint8
 
 const (
 	Host ConsoleActiveView = iota
 	File
+	Task
 )
 
 // The event sends after changing the terminal size.
@@ -32,7 +34,7 @@ type ResizeMsg struct {
 type RefreshMsg struct{}
 
 // The event sends after switching to another view.
-type ChangeActiveView struct {
+type ChangeActiveViewMsg struct {
 	View ConsoleActiveView
 }
 
@@ -40,6 +42,7 @@ type ChangeActiveView struct {
 type ConsoleView struct {
 	hostsView  tea.Model
 	fileView   tea.Model
+	taskView   tea.Model
 	activeView ConsoleActiveView
 	style      lipgloss.Style
 }
@@ -48,13 +51,15 @@ func (model ConsoleView) Init() tea.Cmd {
 	return tea.Sequence(
 		model.hostsView.Init(),
 		model.fileView.Init(),
-		func() tea.Msg { return ChangeActiveView{View: Host} },
+		model.taskView.Init(),
+		func() tea.Msg { return ChangeActiveViewMsg{View: Host} },
 	)
 }
 
 func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var hostViewCmd tea.Cmd
 	var fileViewCmd tea.Cmd
+	var taskViewCmd tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -62,9 +67,11 @@ func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case QuitKeyMsg:
 			return model, tea.Quit
 		case HostActiveKeyMsg:
-			return model, func() tea.Msg { return ChangeActiveView{View: Host} }
+			return model, func() tea.Msg { return ChangeActiveViewMsg{View: Host} }
 		case FileActiveKeyMsg:
-			return model, func() tea.Msg { return ChangeActiveView{View: File} }
+			return model, func() tea.Msg { return ChangeActiveViewMsg{View: File} }
+		case TaskActiveKeyMsg:
+			return model, func() tea.Msg { return ChangeActiveViewMsg{View: Task} }
 		}
 
 		switch model.activeView {
@@ -72,17 +79,22 @@ func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			model.hostsView, hostViewCmd = model.hostsView.Update(msg)
 		case File:
 			model.fileView, fileViewCmd = model.fileView.Update(msg)
+		case Task:
+			model.taskView, taskViewCmd = model.taskView.Update(msg)
 		}
 
-	case ChangeActiveView:
+	case ChangeActiveViewMsg:
 		switch msg.View {
 		case Host:
 			model.activeView = Host
 		case File:
 			model.activeView = File
+		case Task:
+			model.activeView = Task
 		}
 		model.hostsView, hostViewCmd = model.hostsView.Update(msg)
 		model.fileView, fileViewCmd = model.fileView.Update(msg)
+		model.taskView, taskViewCmd = model.taskView.Update(msg)
 
 	case tea.WindowSizeMsg:
 		frameX, frameY := model.style.GetFrameSize()
@@ -96,17 +108,20 @@ func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// TODO. from settings?
 		hostViewWidth := (width / 100.0) * 30.0
 		fileViewWidth := int(width - hostViewWidth)
+		fileViewHeight := int((height / 100.0) * 70.0)
 
 		model.hostsView, hostViewCmd = model.hostsView.Update(ResizeMsg{Width: int(hostViewWidth), Height: int(height)})
-		model.fileView, fileViewCmd = model.fileView.Update(ResizeMsg{Width: fileViewWidth, Height: int(height)})
+		model.fileView, fileViewCmd = model.fileView.Update(ResizeMsg{Width: fileViewWidth, Height: fileViewHeight})
+		model.taskView, taskViewCmd = model.taskView.Update(ResizeMsg{Width: fileViewWidth, Height: int(height) - fileViewHeight})
 	default:
 		model.hostsView, hostViewCmd = model.hostsView.Update(msg)
 		model.fileView, fileViewCmd = model.fileView.Update(msg)
+		model.taskView, taskViewCmd = model.taskView.Update(msg)
 
-		return model, tea.Sequence(hostViewCmd, fileViewCmd)
+		return model, tea.Sequence(hostViewCmd, fileViewCmd, taskViewCmd)
 	}
 
-	return model, tea.Sequence(hostViewCmd, fileViewCmd)
+	return model, tea.Sequence(hostViewCmd, fileViewCmd, taskViewCmd)
 }
 
 func (model ConsoleView) View() string {
@@ -114,7 +129,11 @@ func (model ConsoleView) View() string {
 		lipgloss.JoinHorizontal(
 			lipgloss.Top,
 			model.hostsView.View(),
-			model.fileView.View(),
+			lipgloss.JoinVertical(
+				lipgloss.Left,
+				model.fileView.View(),
+				model.taskView.View(),
+			),
 		),
 	)
 }
@@ -125,5 +144,10 @@ func NewConsoleViewModel(network *api.Network) tea.Model {
 		NewStyle().
 		Align(lipgloss.Left, lipgloss.Left)
 
-	return ConsoleView{hostsView: NewHostView(network), fileView: NewFileView(network), style: style}
+	return ConsoleView{
+		hostsView: NewHostView(network),
+		fileView:  NewFileView(network),
+		taskView:  NewTaskView(network),
+		style:     style,
+	}
 }

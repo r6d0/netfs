@@ -51,6 +51,21 @@ func (host *RemoteHost) File(client transport.TransportSender, fileId FileId) (*
 	return nil, err
 }
 
+// The function returns information about all tasks.
+func (host RemoteHost) Tasks(client transport.TransportSender) ([]RemoteCopyTask, error) {
+	req, err := client.NewRequest(host.IP, Endpoints.FileCopy, nil, nil, nil)
+	if err == nil {
+		var res transport.Response
+		if res, err = client.Send(req); err == nil {
+			tasks := []RemoteCopyTask{}
+			if _, err = res.Body(&tasks); err == nil {
+				return tasks, nil
+			}
+		}
+	}
+	return nil, err
+}
+
 // The function returns information about a task by id.
 func (host RemoteHost) Task(client transport.TransportSender, taskId TaskId) (*RemoteCopyTask, error) {
 	params := []string{Endpoints.FileCopyStatus.TaskId, string(taskId)}

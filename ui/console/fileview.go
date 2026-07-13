@@ -4,8 +4,6 @@ import (
 	"io"
 	"netfs/api"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -53,8 +51,6 @@ func (item FileViewItem) Description() string { return item.File.Info.Path }
 func (item FileViewItem) FilterValue() string { return item.File.Info.Name }
 
 type FileViewItemDelegate struct {
-	headerStyle       lipgloss.Style
-	footerStyle       lipgloss.Style
 	columnTypeStyle   lipgloss.Style
 	columnNameStyle   lipgloss.Style
 	columnSizeStyle   lipgloss.Style
@@ -100,67 +96,7 @@ func (FileViewItemDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 	return nil
 }
 
-type FileViewHeader struct {
-	delegate *FileViewItemDelegate
-}
-
-func (*FileViewHeader) Init() tea.Cmd {
-	return nil
-}
-
-func (header *FileViewHeader) Update(tea.Msg) (tea.Model, tea.Cmd) {
-	return header, nil
-}
-
-func (header *FileViewHeader) View() string {
-	delegate := header.delegate
-	return delegate.headerStyle.Render(
-		lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			delegate.columnTypeStyle.Render("TYPE"),
-			delegate.columnNameStyle.Render("NAME"),
-			delegate.columnSizeStyle.Render("SIZE"),
-		),
-	)
-}
-
-type FileViewFooter struct {
-	count    int
-	delegate *FileViewItemDelegate
-}
-
-func (*FileViewFooter) Init() tea.Cmd {
-	return nil
-}
-
-func (footer *FileViewFooter) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case UpdateFilesMsg:
-		footer.count = len(msg.Items)
-	}
-
-	return footer, nil
-}
-
-func (footer *FileViewFooter) View() string {
-	delegate := footer.delegate
-
-	count := strconv.Itoa(footer.count)
-	countLen := len(count)
-	buffer := strings.Builder{}
-	buffer.WriteString("COUNT: ")
-	for countLen < COUNT_MAX_LEN {
-		countLen++
-		buffer.WriteString(" ")
-	}
-	buffer.WriteString(count)
-
-	return delegate.footerStyle.Render(buffer.String())
-}
-
 type FileView struct {
-	header   tea.Model
-	footer   tea.Model
 	modal    tea.Model
 	list     list.Model
 	delegate *FileViewItemDelegate
@@ -188,7 +124,7 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !modal.GetVisibled() {
 			switch msg.Type {
 			// Enter to the selected directory.
-			case tea.KeyEnter: // TODO. from settings?
+			case tea.KeyEnter:
 				item := model.list.SelectedItem()
 				file := item.(*FileViewItem).File
 				if file.Info.Type == api.DIRECTORY {
@@ -196,7 +132,7 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					model.prev = &prev
 					cmd = model.resolveFileChildren(file)
 				}
-			case tea.KeyBackspace: // TODO. from settings?
+			case tea.KeyBackspace:
 				// Exit to the root directory of the selected host.
 				if msg.Alt {
 					cmd = func() tea.Msg { return ChangeActiveHostMsg{Host: model.host} }
@@ -260,6 +196,12 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Action == "Yes" {
 			cmd = model.deleteFile()
 		}
+	case ChangeActiveViewMsg:
+		if msg.View == File {
+			model.style = model.style.BorderForeground(lipgloss.Color("#3b82f6"))
+		} else {
+			model.style = model.style.BorderForeground(lipgloss.Color("#ffffff"))
+		}
 	case ResizeMsg:
 		frameX, frameY := model.style.GetFrameSize()
 		width := msg.Width - frameX
@@ -270,22 +212,16 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Height(height)
 
 		delegate := model.delegate
-		delegate.headerStyle = delegate.headerStyle.Width(width)
-		delegate.footerStyle = delegate.footerStyle.Width(width)
 		delegate.columnTypeStyle = delegate.columnTypeStyle.Width(COLUMN_TYPE_WIDTH)
 		delegate.columnNameStyle = delegate.columnNameStyle.Width(width - (COLUMN_TYPE_WIDTH + COLUMN_SIZE_WIDTH))
 		delegate.columnSizeStyle = delegate.columnSizeStyle.Width(COLUMN_SIZE_WIDTH)
 		delegate.itemStyle = delegate.itemStyle.Width(width)
 		delegate.itemSelectedStyle = delegate.itemSelectedStyle.Width(width)
 
-		headerSize := lipgloss.Height(model.header.View())
-		footerSize := lipgloss.Height(model.footer.View())
-		model.list.SetSize(width, height-headerSize-footerSize)
+		model.list.SetSize(width, height)
 	}
 
 	if !modal.GetVisibled() {
-		model.header, headerCmd = model.header.Update(msg)
-		model.footer, footerCmd = model.footer.Update(msg)
 		model.list, listCmd = model.list.Update(msg)
 	} else {
 		model.modal, modalCmd = model.modal.Update(msg)
@@ -303,29 +239,18 @@ func (model FileView) View() string {
 			Render(model.modal.View())
 	}
 
-	return model.style.Render(
-		lipgloss.JoinVertical(
-			lipgloss.Left,
-			model.header.View(),
-			model.list.View(),
-			model.footer.View(),
-		),
-	)
+	return model.style.Render(model.list.View())
 }
 
 func NewFileView(network *api.Network) tea.Model {
 	view := FileView{network: network}
 	view.delegate = &FileViewItemDelegate{
-		headerStyle:       lipgloss.NewStyle().Height(1).BorderForeground(lipgloss.Color("#ffffff")).BorderStyle(lipgloss.NormalBorder()).BorderBottom(true),
-		footerStyle:       lipgloss.NewStyle().AlignHorizontal(lipgloss.Right).Height(1).BorderForeground(lipgloss.Color("#ffffff")).BorderStyle(lipgloss.NormalBorder()).BorderTop(true),
 		columnTypeStyle:   lipgloss.NewStyle().AlignHorizontal(lipgloss.Left),
 		columnNameStyle:   lipgloss.NewStyle().AlignHorizontal(lipgloss.Left),
 		columnSizeStyle:   lipgloss.NewStyle().AlignHorizontal(lipgloss.Right),
 		itemStyle:         lipgloss.NewStyle(),
 		itemSelectedStyle: lipgloss.NewStyle().Background(lipgloss.Color("#3b82f6")),
 	}
-	view.header = &FileViewHeader{delegate: view.delegate}
-	view.footer = &FileViewFooter{delegate: view.delegate}
 
 	lst := list.New([]list.Item{}, view.delegate, 0, 0)
 	lst.DisableQuitKeybindings()

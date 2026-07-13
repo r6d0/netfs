@@ -37,6 +37,7 @@ var Endpoints = struct {
 	FileCreate     string
 	FileWrite      FileWriteEndpoint
 	FileRemove     FileRemoveEndpoint
+	FileCopy       string
 	FileCopyStart  string
 	FileCopyStatus FileCopyStatusEndpoint
 	FileCopyCancel FileCopyCancelEndpoint
@@ -48,6 +49,7 @@ var Endpoints = struct {
 	FileCreate:     "/netfs/api/file/create",
 	FileWrite:      FileWriteEndpoint{Name: "/netfs/api/file/write", FileId: "fileId"},
 	FileRemove:     FileRemoveEndpoint{Name: "/netfs/api/file/remove", FileId: "fileId"},
+	FileCopy:       "/netfs/api/file/copy/all",
 	FileCopyStart:  "/netfs/api/file/copy/start",
 	FileCopyStatus: FileCopyStatusEndpoint{Name: "/netfs/api/file/copy/status", TaskId: "id"},
 	FileCopyCancel: FileCopyCancelEndpoint{Name: "/netfs/api/file/copy/cancel", TaskId: "id"},

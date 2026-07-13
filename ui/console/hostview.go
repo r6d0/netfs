@@ -90,11 +90,11 @@ func (model HostView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			item := model.list.SelectedItem()
 			cmd = tea.Sequence(
 				func() tea.Msg { return ChangeActiveHostMsg{Host: item.(*HostViewItem).Host} },
-				func() tea.Msg { return ChangeActiveView{View: File} },
+				func() tea.Msg { return ChangeActiveViewMsg{View: File} },
 			)
 		}
 
-	case ChangeActiveView:
+	case ChangeActiveViewMsg:
 		model.active = (msg.View == Host)
 	case ChangeHostsMsg:
 		cmd = model.list.SetItems(msg.Items)

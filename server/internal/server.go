@@ -98,7 +98,7 @@ func (srv *Server) Start() error {
 	srv.receiver.Receive(api.Endpoints.FileWrite.Name, srv.FileWriteHandle)
 	srv.receiver.Receive(api.Endpoints.FileRemove.Name, srv.FileRemoveHandle)
 	srv.receiver.Receive(api.Endpoints.FileCopyStart, srv.FileCopyStartHandle)
-	// srv.receiver.Receive(api.Endpoints.FileCopyStatus.Name, srv.FileCopyStatusHandle)
+	srv.receiver.Receive(api.Endpoints.FileCopy, srv.FileCopyHandle)
 	// srv.receiver.Receive(api.Endpoints.FileCopyStop.Name, srv.FileCopyCancelHandle)
 
 	err := srv.receiver.Start()
@@ -337,6 +337,14 @@ func (srv *Server) FileRemoveHandle(req transport.Request) ([]byte, any, error) 
 	return nil, nil, err
 }
 
+// The function handles request and returns information about all tasks.
+func (srv *Server) FileCopyHandle(req transport.Request) ([]byte, any, error) {
+	tasks := srv.copyScheduler.Tasks()
+	srv.log.Info("FileCopyHandle()", "tasks", tasks)
+
+	return nil, tasks, nil
+}
+
 // The function handles request and starts a new task to copy the file or directory.
 func (srv *Server) FileCopyStartHandle(req transport.Request) ([]byte, any, error) {
 	task := &api.RemoteCopyTask{}
@@ -388,6 +396,17 @@ type CopyScheduler struct {
 	tasks   []*api.RemoteCopyTask
 	network *api.Network
 	cancel  chan api.TaskId
+}
+
+func (sch *CopyScheduler) Tasks() []api.RemoteCopyTask {
+	tasks := make([]api.RemoteCopyTask, len(sch.tasks))
+	for index := range sch.tasks {
+		task := sch.tasks[index]
+		if task != nil && task.Source.Info.Id != "" {
+			tasks[index] = *task
+		}
+	}
+	return tasks
 }
 
 func (sch *CopyScheduler) StartTask(task *api.RemoteCopyTask) error {

@@ -339,8 +339,10 @@ func (srv *Server) FileRemoveHandle(req transport.Request) ([]byte, any, error) 
 
 // The function handles request and returns information about all tasks.
 func (srv *Server) FileCopyHandle(req transport.Request) ([]byte, any, error) {
+	srv.log.Info("FileCopyHandle()")
+
 	tasks := srv.copyScheduler.Tasks()
-	srv.log.Info("FileCopyHandle()", "tasks", tasks)
+	srv.log.Info("FileCopyHandle()", "tasks", len(tasks))
 
 	return nil, tasks, nil
 }

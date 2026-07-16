@@ -2,6 +2,7 @@ package console
 
 import (
 	"netfs/api"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -53,15 +54,23 @@ func (model ConsoleView) Init() tea.Cmd {
 		model.fileView.Init(),
 		model.taskView.Init(),
 		func() tea.Msg { return ChangeActiveViewMsg{View: Host} },
+		tea.Every(3*time.Second, func(t time.Time) tea.Msg { return RefreshMsg{} }), // TODO. 3*time.Second - from settings
 	)
 }
 
 func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	var hostViewCmd tea.Cmd
 	var fileViewCmd tea.Cmd
 	var taskViewCmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case RefreshMsg:
+		cmd = tea.Every(3*time.Second, func(t time.Time) tea.Msg { return RefreshMsg{} }) // TODO. 3*time.Second - from settings
+		model.hostsView, hostViewCmd = model.hostsView.Update(msg)
+		model.fileView, fileViewCmd = model.fileView.Update(msg)
+		model.taskView, taskViewCmd = model.taskView.Update(msg)
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case QuitKeyMsg:
@@ -118,10 +127,10 @@ func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model.fileView, fileViewCmd = model.fileView.Update(msg)
 		model.taskView, taskViewCmd = model.taskView.Update(msg)
 
-		return model, tea.Sequence(hostViewCmd, fileViewCmd, taskViewCmd)
+		return model, tea.Sequence(cmd, hostViewCmd, fileViewCmd, taskViewCmd)
 	}
 
-	return model, tea.Sequence(hostViewCmd, fileViewCmd, taskViewCmd)
+	return model, tea.Sequence(cmd, hostViewCmd, fileViewCmd, taskViewCmd)
 }
 
 func (model ConsoleView) View() string {

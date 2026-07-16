@@ -1,6 +1,7 @@
 package console
 
 import (
+	"fmt"
 	"io"
 	"netfs/api"
 
@@ -8,6 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+const COLUMN_PROGRESS_WIDTH = 4
 
 type UpdateTaskMsg struct {
 	Items []list.Item
@@ -22,8 +25,11 @@ func (item TaskViewItem) Description() string { return item.Task.Source.Info.Nam
 func (item TaskViewItem) FilterValue() string { return item.Task.Source.Info.Name }
 
 type TaskViewItemDelegate struct {
-	itemStyle         lipgloss.Style
-	itemSelectedStyle lipgloss.Style
+	columnTitleStyle    lipgloss.Style
+	columnCountStyle    lipgloss.Style
+	columnProgressStyle lipgloss.Style
+	itemStyle           lipgloss.Style
+	itemSelectedStyle   lipgloss.Style
 }
 
 func (delegate TaskViewItemDelegate) Render(writer io.Writer, model list.Model, index int, item list.Item) {
@@ -33,7 +39,23 @@ func (delegate TaskViewItemDelegate) Render(writer io.Writer, model list.Model, 
 	}
 
 	taskItem := item.(*TaskViewItem)
-	writer.Write([]byte(style.Render(taskItem.Title())))
+	title := taskItem.Task.Source.Host.Name + "/../" + taskItem.Task.Source.Info.Name + " to " + taskItem.Task.Target.Host.Name + "/../" + taskItem.Task.Target.Info.Name
+	count := fmt.Sprintf("%d/%d ", taskItem.Task.Current, taskItem.Task.Count)
+	progress := fmt.Sprintf("  %d", taskItem.Task.Progress) + "%"
+
+	style = style.Width(model.Width())
+	delegate.columnTitleStyle = delegate.columnTitleStyle.Width(model.Width() - (lipgloss.Width(count) + lipgloss.Width(progress)))
+
+	writer.Write([]byte(
+		style.Render(
+			lipgloss.JoinHorizontal(
+				lipgloss.Left,
+				delegate.columnTitleStyle.Render(title),
+				delegate.columnCountStyle.Render(count),
+				delegate.columnProgressStyle.Render(progress),
+			),
+		),
+	))
 }
 
 func (TaskViewItemDelegate) Height() int { return 1 }
@@ -71,6 +93,10 @@ func (model TaskView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			model.style = model.style.BorderForeground(lipgloss.Color("#3b82f6"))
 		} else {
 			model.style = model.style.BorderForeground(lipgloss.Color("#ffffff"))
+		}
+	case RefreshMsg:
+		if model.host != nil {
+			cmd = model.resolveTasks()
 		}
 	case ResizeMsg:
 		frameX, frameY := model.style.GetFrameSize()
@@ -114,8 +140,11 @@ func (model TaskView) resolveTasks() tea.Cmd {
 
 func NewTaskView(network *api.Network) tea.Model {
 	delegate := TaskViewItemDelegate{
-		itemStyle:         lipgloss.NewStyle(),
-		itemSelectedStyle: lipgloss.NewStyle().Background(lipgloss.Color("#3b82f6")),
+		columnTitleStyle:    lipgloss.NewStyle().AlignHorizontal(lipgloss.Left),
+		columnCountStyle:    lipgloss.NewStyle().AlignHorizontal(lipgloss.Right),
+		columnProgressStyle: lipgloss.NewStyle().AlignHorizontal(lipgloss.Right),
+		itemStyle:           lipgloss.NewStyle(),
+		itemSelectedStyle:   lipgloss.NewStyle().Background(lipgloss.Color("#3b82f6")),
 	}
 
 	lst := list.New([]list.Item{}, delegate, 0, 0)

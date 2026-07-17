@@ -280,10 +280,10 @@ func (srv *Server) FileCreateHandle(req transport.Request) ([]byte, any, error) 
 				err = ErrFileAlreadyExists
 			} else {
 				if info.Type == api.DIRECTORY {
-					err = os.MkdirAll(info.Path, 0777)
+					err = os.MkdirAll(info.Path, 0755)
 				} else {
 					parent := filepath.Dir(info.Path)
-					if err = os.MkdirAll(parent, 0777); err == nil {
+					if err = os.MkdirAll(parent, 0755); err == nil {
 						var file *os.File
 						if file, err = os.Create(info.Path); file != nil {
 							file.Close()
@@ -314,7 +314,7 @@ func (srv *Server) FileWriteHandle(req transport.Request) ([]byte, any, error) {
 		data := req.RawBody()
 		srv.log.Info("FileWriteHandle()", "fileId", "bytes", fileId, len(data))
 
-		err = os.WriteFile(fileId, req.RawBody(), fs.ModeAppend)
+		err = os.WriteFile(fileId, req.RawBody(), 0777)
 	}
 
 	if err != nil {
@@ -512,13 +512,13 @@ func (sch *CopyScheduler) copyDirectory(task *api.RemoteCopyTask, cancel chan ap
 					}
 
 					if err == nil {
-						task.Progress = 0
-
 						if task.Current < task.Count {
+							task.Progress = int(float32(task.Current) / float32(task.Count) * 100.0)
 							task.Current++
 							task.Status = api.Running
 						} else {
 							sch.log.Info("CopyDirectory()", "taskId", task.Id, "completed", true)
+							task.Progress = 100
 							task.Status = api.Completed
 						}
 					}
@@ -569,14 +569,18 @@ func (sch *CopyScheduler) copyFile(task *api.RemoteCopyTask, cancel chan api.Tas
 						}
 					}
 				default:
-					if read, err = file.ReadAt(buffer, offset); err == nil {
-						if err = target.Write(client, buffer[:read]); err == nil {
-							offset += int64(read)
-							task.Progress = int(min((float64(offset) / progressPercent), 100.0))
-						}
+					if size > 0 {
+						if read, err = file.ReadAt(buffer, offset); err == nil {
+							if err = target.Write(client, buffer[:read]); err == nil {
+								offset += int64(read)
+								task.Progress = int(min((float64(offset) / progressPercent), 100.0))
+							}
 
-						sch.log.Info("CopyFile()", "taskId", task.Id, "offset", offset, "progress", task.Progress)
-					} else if errors.Is(err, io.EOF) {
+							sch.log.Info("CopyFile()", "taskId", task.Id, "offset", offset, "progress", task.Progress)
+						}
+					}
+
+					if size == 0 || errors.Is(err, io.EOF) {
 						err = nil
 						endTime := time.Now()
 						task.Progress = 100.0

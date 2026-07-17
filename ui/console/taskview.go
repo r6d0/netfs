@@ -1,16 +1,18 @@
 package console
 
 import (
-	"fmt"
 	"io"
 	"netfs/api"
+	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-const COLUMN_PROGRESS_WIDTH = 4
+const COLUMN_PROGRESS_WIDTH = 5
 
 type UpdateTaskMsg struct {
 	Items []list.Item
@@ -39,9 +41,26 @@ func (delegate TaskViewItemDelegate) Render(writer io.Writer, model list.Model, 
 	}
 
 	taskItem := item.(*TaskViewItem)
-	title := taskItem.Task.Source.Host.Name + "/../" + taskItem.Task.Source.Info.Name + " to " + taskItem.Task.Target.Host.Name + "/../" + taskItem.Task.Target.Info.Name
-	count := fmt.Sprintf("%d/%d ", taskItem.Task.Current, taskItem.Task.Count)
-	progress := fmt.Sprintf("  %d", taskItem.Task.Progress) + "%"
+	source := taskItem.Task.Source
+	target := taskItem.Task.Target
+	title := strings.Join([]string{
+		source.Host.Name,
+		"/../",
+		filepath.Base(filepath.Dir(source.Info.Path)),
+		"/",
+		source.Info.Name,
+		" to ",
+		target.Host.Name,
+		"/../",
+		filepath.Base(filepath.Dir(target.Info.Path)),
+		"/",
+		target.Info.Name,
+	}, "")
+
+	count := strings.Join([]string{strconv.Itoa(taskItem.Task.Current), strconv.Itoa(taskItem.Task.Count)}, "/")
+	progress := delegate.
+		columnProgressStyle.
+		Render(strconv.Itoa(taskItem.Task.Progress) + "%")
 
 	style = style.Width(model.Width())
 	delegate.columnTitleStyle = delegate.columnTitleStyle.Width(model.Width() - (lipgloss.Width(count) + lipgloss.Width(progress)))
@@ -142,7 +161,7 @@ func NewTaskView(network *api.Network) tea.Model {
 	delegate := TaskViewItemDelegate{
 		columnTitleStyle:    lipgloss.NewStyle().AlignHorizontal(lipgloss.Left),
 		columnCountStyle:    lipgloss.NewStyle().AlignHorizontal(lipgloss.Right),
-		columnProgressStyle: lipgloss.NewStyle().AlignHorizontal(lipgloss.Right),
+		columnProgressStyle: lipgloss.NewStyle().AlignHorizontal(lipgloss.Right).Width(COLUMN_PROGRESS_WIDTH),
 		itemStyle:           lipgloss.NewStyle(),
 		itemSelectedStyle:   lipgloss.NewStyle().Background(lipgloss.Color("#3b82f6")),
 	}

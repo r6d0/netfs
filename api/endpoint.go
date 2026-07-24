@@ -30,11 +30,16 @@ type FileChildrenEndpoint struct {
 	FileId string
 }
 
+type FileCreateEndpoint struct {
+	Name    string
+	Replace string
+}
+
 var Endpoints = struct {
 	ServerHost     string
 	ServerStop     string
 	FileInfo       FileInfoEndpoint
-	FileCreate     string
+	FileCreate     FileCreateEndpoint
 	FileWrite      FileWriteEndpoint
 	FileRemove     FileRemoveEndpoint
 	FileCopy       string
@@ -46,7 +51,7 @@ var Endpoints = struct {
 	ServerHost:     "/netfs/api/server/host",
 	ServerStop:     "/netfs/api/server/stop",
 	FileInfo:       FileInfoEndpoint{Name: "/netfs/api/file/info", FileId: "fileId"},
-	FileCreate:     "/netfs/api/file/create",
+	FileCreate:     FileCreateEndpoint{Name: "/netfs/api/file/create", Replace: "replace"},
 	FileWrite:      FileWriteEndpoint{Name: "/netfs/api/file/write", FileId: "fileId"},
 	FileRemove:     FileRemoveEndpoint{Name: "/netfs/api/file/remove", FileId: "fileId"},
 	FileCopy:       "/netfs/api/file/copy/all",

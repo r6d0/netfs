@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+// TODO. Remove this abstractions and use only HTTP?
+
 // Returns if the response was unexpected.
 var ErrUnexpectedAnswer = errors.New("unexpected answer")
 

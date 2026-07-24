@@ -3,6 +3,7 @@ package api
 import (
 	"net"
 	"netfs/api/transport"
+	"strconv"
 )
 
 const rootDirectory = "/"
@@ -19,8 +20,12 @@ func (host *RemoteHost) Root() *RemoteFile {
 }
 
 // The function creates a file or directory on the remote host.
-func (host *RemoteHost) Create(client transport.TransportSender, info FileInfo) (*RemoteFile, error) {
-	req, err := client.NewRequest(host.IP, Endpoints.FileCreate, nil, nil, info)
+func (host *RemoteHost) Create(client transport.TransportSender, info FileInfo, replace bool) (*RemoteFile, error) {
+	params := []string{
+		Endpoints.FileCreate.Replace, strconv.FormatBool(replace),
+	}
+
+	req, err := client.NewRequest(host.IP, Endpoints.FileCreate.Name, params, nil, info)
 	if err == nil {
 		var res transport.Response
 		if res, err = client.Send(req); err == nil {

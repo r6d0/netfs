@@ -57,6 +57,7 @@ func TestFileChildrenHandleSuccess(t *testing.T) {
 	dir, _ := host.Create(
 		network.Transport(),
 		api.FileInfo{Name: "test", Path: filepath.Join(root, "test"), Type: api.DIRECTORY},
+		true,
 	)
 	file, _ := host.Create(
 		network.Transport(),
@@ -66,6 +67,7 @@ func TestFileChildrenHandleSuccess(t *testing.T) {
 			Path:     filepath.Join(string(dir.Info.Path), "test.txt"),
 			ParentId: dir.Info.Id,
 		},
+		true,
 	)
 
 	children, err := dir.Children(network.Transport())
@@ -91,6 +93,7 @@ func TestFileCreateHandleSuccess(t *testing.T) {
 	file, err := host.Create(
 		network.Transport(),
 		api.FileInfo{Name: "test.txt", Path: filepath.Join(root, "test.txt"), Type: api.FILE},
+		false,
 	)
 	if err != nil {
 		t.Fatalf("error should be nil, but err is [%s]", err)
@@ -119,11 +122,13 @@ func TestFileCreateHandleErrFileAlreadyExists(t *testing.T) {
 	file, err := host.Create(
 		network.Transport(),
 		api.FileInfo{Name: "test.txt", Path: filepath.Join(root, "test.txt"), Type: api.FILE},
+		false,
 	)
 
 	_, err = host.Create(
 		network.Transport(),
 		api.FileInfo{Name: "test.txt", Path: filepath.Join(root, "test.txt"), Type: api.FILE},
+		false,
 	)
 	if err == nil {
 		t.Fatalf("error should be not nil")
@@ -143,6 +148,7 @@ func TestFileCopyStartHandleSuccess(t *testing.T) {
 	file, _ := host.Create(
 		network.Transport(),
 		api.FileInfo{Name: "test.txt", Path: filepath.Join(root, "test.txt"), Type: api.FILE},
+		false,
 	)
 	file.Write(network.Transport(), generate(1024))
 

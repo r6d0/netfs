@@ -3,6 +3,7 @@ package console
 import (
 	"io"
 	"netfs/api"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -44,7 +45,7 @@ func (delegate HostViewItemDelegate) Render(writer io.Writer, model list.Model, 
 	writer.Write(
 		[]byte(
 			style.Render(
-				hostItem.Host.Name + "(" + hostItem.Host.IP.String() + ")",
+				strings.Join([]string{hostItem.Host.Name, "(", hostItem.Host.IP.String(), ")"}, ""),
 			),
 		),
 	)

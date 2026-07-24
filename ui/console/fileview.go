@@ -56,11 +56,12 @@ type FileViewItemDelegate struct {
 	columnSizeStyle   lipgloss.Style
 	itemStyle         lipgloss.Style
 	itemSelectedStyle lipgloss.Style
+	isActive          bool
 }
 
 func (delegate FileViewItemDelegate) Render(writer io.Writer, model list.Model, index int, item list.Item) {
 	style := delegate.itemStyle
-	if model.Index() == index {
+	if delegate.isActive && model.Index() == index {
 		style = delegate.itemSelectedStyle
 	}
 
@@ -198,8 +199,10 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case ChangeActiveViewMsg:
 		if msg.View == File {
+			model.delegate.isActive = true
 			model.style = model.style.BorderForeground(lipgloss.Color("#3b82f6"))
 		} else {
+			model.delegate.isActive = false
 			model.style = model.style.BorderForeground(lipgloss.Color("#ffffff"))
 		}
 	case ResizeMsg:

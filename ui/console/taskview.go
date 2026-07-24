@@ -32,11 +32,12 @@ type TaskViewItemDelegate struct {
 	columnProgressStyle lipgloss.Style
 	itemStyle           lipgloss.Style
 	itemSelectedStyle   lipgloss.Style
+	isActive            bool
 }
 
 func (delegate TaskViewItemDelegate) Render(writer io.Writer, model list.Model, index int, item list.Item) {
 	style := delegate.itemStyle
-	if model.Index() == index {
+	if delegate.isActive && model.Index() == index {
 		style = delegate.itemSelectedStyle
 	}
 
@@ -109,8 +110,10 @@ func (model TaskView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd = model.list.SetItems(msg.Items)
 	case ChangeActiveViewMsg:
 		if msg.View == Task {
+			model.delegate.isActive = true
 			model.style = model.style.BorderForeground(lipgloss.Color("#3b82f6"))
 		} else {
+			model.delegate.isActive = false
 			model.style = model.style.BorderForeground(lipgloss.Color("#ffffff"))
 		}
 	case RefreshMsg:

@@ -4,6 +4,7 @@ import (
 	"io"
 	"netfs/api"
 	"netfs/ui/console/message"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -11,20 +12,23 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// The event sends after the host is selected.
 type ChangeActiveHostMsg struct {
 	Host  *api.Host
-	Error error
+	Alive bool
 }
 
-// The event sends after receiving the hosts.
-type ChangeHostsMsg struct {
+type UpdateHostsMsg struct {
 	Items []list.Item
-	Error error
+	Index int
 }
 
 type HostViewItem struct {
-	Host *api.Host
+	Host  *api.Host
+	Alive bool
+}
+
+func (item HostViewItem) Equal(other HostViewItem) bool {
+	return item.Host.IP.Equal(other.Host.IP)
 }
 
 func (item HostViewItem) Title() string       { return item.Host.Name }
@@ -43,6 +47,10 @@ func (delegate HostViewItemDelegate) Render(writer io.Writer, model list.Model, 
 	}
 
 	hostItem := item.(*HostViewItem)
+	if !hostItem.Alive {
+		style = style.Foreground(lipgloss.Color("#777575"))
+	}
+
 	writer.Write(
 		[]byte(
 			style.Render(
@@ -60,7 +68,6 @@ func (HostViewItemDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 	return nil
 }
 
-// The view for displaying hosts.
 type HostView struct {
 	list        list.Model
 	style       lipgloss.Style
@@ -70,17 +77,7 @@ type HostView struct {
 }
 
 func (model HostView) Init() tea.Cmd {
-	return func() tea.Msg {
-		hosts, err := model.network.Hosts()
-		if err == nil && len(hosts) > 0 {
-			items := make([]list.Item, len(hosts))
-			for index, host := range hosts {
-				items[index] = &HostViewItem{Host: &host}
-			}
-			return ChangeHostsMsg{Items: items}
-		}
-		return ChangeHostsMsg{Error: err}
-	}
+	return model.refreshHosts()
 }
 
 func (model HostView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -90,16 +87,31 @@ func (model HostView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyEnter {
 			item := model.list.SelectedItem()
-			cmd = tea.Sequence(
-				func() tea.Msg { return ChangeActiveHostMsg{Host: item.(*HostViewItem).Host} },
-				func() tea.Msg { return ChangeActiveViewMsg{View: File} },
-			)
+			hostItem := item.(*HostViewItem)
+
+			if hostItem.Alive {
+				cmd = tea.Sequence(
+					func() tea.Msg { return ChangeActiveHostMsg{Host: hostItem.Host, Alive: hostItem.Alive} },
+					func() tea.Msg { return ChangeActiveViewMsg{View: File} },
+				)
+			}
 		}
 
 	case ChangeActiveViewMsg:
 		model.active = (msg.View == Host)
-	case ChangeHostsMsg:
-		cmd = model.list.SetItems(msg.Items)
+	case UpdateHostsMsg:
+		selectedHost := model.selectedItem()
+
+		model.list.SetItems(msg.Items)
+		for index, item := range msg.Items {
+			hostItem := item.(*HostViewItem)
+			if selectedHost != nil && hostItem.Host.IP.Equal(selectedHost.IP) {
+				model.list.Select(index)
+				break
+			}
+		}
+	case message.RefreshMsg:
+		cmd = model.refreshHosts()
 	case message.ResizeMsg:
 		frameX, frameY := model.style.GetFrameSize()
 		width := msg.Width - frameX
@@ -128,6 +140,37 @@ func (model HostView) View() string {
 		return model.activeStyle.Render(model.list.View())
 	}
 	return model.style.Render(model.list.View())
+}
+
+func (model HostView) refreshHosts() tea.Cmd {
+	return func() tea.Msg {
+		items := make([]list.Item, len(model.list.Items()))
+
+		hosts, err := model.network.Hosts()
+		if err == nil && len(hosts) > 0 { // TODO. show error
+			for index, item := range model.list.Items() {
+				hostItem := item.(*HostViewItem)
+				items[index] = &HostViewItem{Host: hostItem.Host, Alive: slices.ContainsFunc(hosts, hostItem.Host.Equal)}
+			}
+
+			for _, host := range hosts {
+				if !slices.ContainsFunc(items, func(item list.Item) bool { return item.(*HostViewItem).Host.Equal(host) }) {
+					items = append(items, &HostViewItem{Host: &host, Alive: true})
+				}
+			}
+		}
+		return UpdateHostsMsg{Items: items}
+	}
+}
+
+func (model HostView) selectedItem() *api.Host {
+	item := model.list.SelectedItem()
+	if item != nil {
+		if hostItem, ok := item.(*HostViewItem); ok {
+			return hostItem.Host
+		}
+	}
+	return nil
 }
 
 func NewHostView(network *api.Network) tea.Model {

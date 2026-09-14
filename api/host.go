@@ -16,6 +16,10 @@ type Host struct {
 	Network *Network
 }
 
+func (host *Host) Equal(other Host) bool {
+	return host.IP.Equal(other.IP)
+}
+
 func (host *Host) Root() *File {
 	return &File{Host: host, Info: FileInfo{Id: rootDirectory, Path: rootDirectory}}
 }

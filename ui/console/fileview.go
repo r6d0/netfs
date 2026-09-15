@@ -49,13 +49,18 @@ type FileViewItemDelegate struct {
 	columnSizeStyle   lipgloss.Style
 	itemStyle         lipgloss.Style
 	itemSelectedStyle lipgloss.Style
-	isActive          bool
+	active            bool
+	alive             bool
 }
 
 func (delegate FileViewItemDelegate) Render(writer io.Writer, model list.Model, index int, item list.Item) {
 	style := delegate.itemStyle
-	if delegate.isActive && model.Index() == index {
+	if delegate.active && model.Index() == index {
 		style = delegate.itemSelectedStyle
+	}
+
+	if !delegate.alive {
+		style = style.Foreground(lipgloss.Color("#777575"))
 	}
 
 	fileItem := item.(*FileViewItem)
@@ -91,7 +96,6 @@ func (FileViewItemDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 }
 
 type FileView struct {
-	count    int
 	list     list.Model
 	style    lipgloss.Style
 	id       string
@@ -101,6 +105,7 @@ type FileView struct {
 	network  *api.Network
 	toCopy   *api.File
 	toMove   *api.File
+	alive    bool
 }
 
 func (model FileView) Init() tea.Cmd {
@@ -186,43 +191,58 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.Type {
-		// Enter to the selected directory.
-		case tea.KeyEnter:
-			item := model.list.SelectedItem()
-			file := item.(*FileViewItem).File
-			if file.Info.Type == api.DIRECTORY {
-				prev := FileViewHistoryNode{Item: item, Prev: model.prev}
-				model.prev = &prev
-				cmd = model.resolveFileChildren(file)
-			}
-		case tea.KeyBackspace:
-			// Exit to the root directory of the selected host.
-			if msg.Alt {
-				cmd = func() tea.Msg { return ChangeActiveHostMsg{Host: model.host} }
-				// Exit from the selected directory.
-			} else if model.prev.Prev != nil {
-				model.prev = model.prev.Prev
-				item := model.prev.Item
-				if item == nil {
+		if model.alive {
+			switch msg.Type {
+			// Enter to the selected directory.
+			case tea.KeyEnter:
+				item := model.list.SelectedItem()
+				file := item.(*FileViewItem).File
+				if file.Info.Type == api.DIRECTORY {
+					prev := FileViewHistoryNode{Item: item, Prev: model.prev}
+					model.prev = &prev
+					cmd = model.resolveFileChildren(file)
+				}
+			case tea.KeyBackspace:
+				// Exit to the root directory of the selected host.
+				if msg.Alt {
 					cmd = func() tea.Msg { return ChangeActiveHostMsg{Host: model.host} }
-				} else {
-					cmd = model.resolveFileChildren(item.(*FileViewItem).File)
+					// Exit from the selected directory.
+				} else if model.prev.Prev != nil {
+					model.prev = model.prev.Prev
+					item := model.prev.Item
+					if item == nil {
+						cmd = func() tea.Msg { return ChangeActiveHostMsg{Host: model.host} }
+					} else {
+						cmd = model.resolveFileChildren(item.(*FileViewItem).File)
+					}
 				}
 			}
 		}
 	case ChangeActiveHostMsg:
-		model.prev = &FileViewHistoryNode{}
+		if !msg.Host.Equal(model.host) {
+			model.prev = &FileViewHistoryNode{}
+			cmd = model.resolveFileChildren(msg.Host.Root())
+		}
 		model.host = msg.Host
-		cmd = model.resolveFileChildren(msg.Host.Root())
+		model.alive = msg.Alive
+		model.delegate.alive = msg.Alive
 	case UpdateFilesMsg:
-		cmd = model.list.SetItems(msg.Items)
+		selectedFile := model.selectedItem()
+
+		model.list.SetItems(msg.Items)
+		for index, item := range msg.Items {
+			fileItem := item.(*FileViewItem)
+			if selectedFile != nil && selectedFile.Info.Id == fileItem.File.Info.Id {
+				model.list.Select(index)
+				break
+			}
+		}
 	case ChangeActiveViewMsg:
 		if msg.View == File {
-			model.delegate.isActive = true
+			model.delegate.active = true
 			model.style = model.style.BorderForeground(lipgloss.Color("#3b82f6")) // TODO. from settings
 		} else {
-			model.delegate.isActive = false
+			model.delegate.active = false
 			model.style = model.style.BorderForeground(lipgloss.Color("#ffffff")) // TODO. from settings
 		}
 	case message.ResizeMsg:
@@ -254,40 +274,43 @@ func (model FileView) View() string {
 
 func (model FileView) selectedItem() *api.File {
 	item := model.list.SelectedItem()
-	return item.(*FileViewItem).File
+	if item != nil {
+		return item.(*FileViewItem).File
+	}
+	return nil
 }
 
 func (model FileView) isCopyKeyPressed(msg tea.Msg) bool {
 	if msg, ok := msg.(tea.KeyMsg); ok {
-		return msg.String() == "alt+c" // TODO. from settings
+		return model.alive && msg.String() == "alt+c" // TODO. from settings
 	}
 	return false
 }
 
 func (model FileView) isMoveKeyPressed(msg tea.Msg) bool {
 	if msg, ok := msg.(tea.KeyMsg); ok {
-		return msg.String() == "alt+x" // TODO. from settings
+		return model.alive && msg.String() == "alt+x" // TODO. from settings
 	}
 	return false
 }
 
 func (model FileView) isPasteKeyPressed(msg tea.Msg) bool {
 	if msg, ok := msg.(tea.KeyMsg); ok {
-		return msg.String() == "alt+v" // TODO. from settings
+		return model.alive && msg.String() == "alt+v" // TODO. from settings
 	}
 	return false
 }
 
 func (model FileView) isCreateFileKeyPressed(msg tea.Msg) bool {
 	if msg, ok := msg.(tea.KeyMsg); ok {
-		return msg.String() == "alt+n" // TODO. from settings
+		return model.alive && msg.String() == "alt+n" // TODO. from settings
 	}
 	return false
 }
 
 func (model FileView) isCreateDirectoryKeyPressed(msg tea.Msg) bool {
 	if msg, ok := msg.(tea.KeyMsg); ok {
-		return msg.String() == "alt+d" // TODO. from settings
+		return model.alive && msg.String() == "alt+d" // TODO. from settings
 	}
 	return false
 }
@@ -314,7 +337,7 @@ func (model FileView) isCreateDirectoryConfirm(msg tea.Msg) bool {
 
 func (model FileView) isRenameKeyPressed(msg tea.Msg) bool {
 	if msg, ok := msg.(tea.KeyMsg); ok {
-		return msg.String() == "alt+g" // TODO. from settings
+		return model.alive && msg.String() == "alt+g" // TODO. from settings
 	}
 	return false
 }
@@ -331,7 +354,7 @@ func (model FileView) isRenameFileConfirm(msg tea.Msg) bool {
 
 func (model FileView) isDeleteKeyPressed(msg tea.Msg) bool {
 	if msg, ok := msg.(tea.KeyMsg); ok {
-		return msg.String() == "delete" // TODO. from settings
+		return model.alive && msg.String() == "delete" // TODO. from settings
 	}
 	return false
 }
@@ -559,7 +582,7 @@ func (model FileView) checkFileExistsInList(name string) (bool, string) {
 }
 
 func NewFileView(network *api.Network) tea.Model {
-	view := FileView{id: "", network: network}
+	view := &FileView{id: "FileView", network: network}
 	view.delegate = &FileViewItemDelegate{
 		columnTypeStyle:   lipgloss.NewStyle().AlignHorizontal(lipgloss.Left),
 		columnNameStyle:   lipgloss.NewStyle().AlignHorizontal(lipgloss.Left),
@@ -583,5 +606,5 @@ func NewFileView(network *api.Network) tea.Model {
 		BorderForeground(lipgloss.Color("#ffffff")).
 		BorderStyle(lipgloss.NormalBorder())
 
-	return &view
+	return view
 }

@@ -107,6 +107,7 @@ func (model HostView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			hostItem := item.(*HostViewItem)
 			if selectedHost != nil && hostItem.Host.IP.Equal(selectedHost.IP) {
 				model.list.Select(index)
+				cmd = func() tea.Msg { return ChangeActiveHostMsg{Host: hostItem.Host, Alive: hostItem.Alive} }
 				break
 			}
 		}
@@ -147,14 +148,17 @@ func (model HostView) refreshHosts() tea.Cmd {
 		items := make([]list.Item, len(model.list.Items()))
 
 		hosts, err := model.network.Hosts()
-		if err == nil && len(hosts) > 0 { // TODO. show error
+		if err == nil { // TODO. show error
 			for index, item := range model.list.Items() {
 				hostItem := item.(*HostViewItem)
-				items[index] = &HostViewItem{Host: hostItem.Host, Alive: slices.ContainsFunc(hosts, hostItem.Host.Equal)}
+				items[index] = &HostViewItem{
+					Host:  hostItem.Host,
+					Alive: slices.ContainsFunc(hosts, func(host api.Host) bool { return hostItem.Host.Equal(&host) }),
+				}
 			}
 
 			for _, host := range hosts {
-				if !slices.ContainsFunc(items, func(item list.Item) bool { return item.(*HostViewItem).Host.Equal(host) }) {
+				if !slices.ContainsFunc(items, func(item list.Item) bool { return item.(*HostViewItem).Host.Equal(&host) }) {
 					items = append(items, &HostViewItem{Host: &host, Alive: true})
 				}
 			}

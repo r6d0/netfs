@@ -31,6 +31,6 @@ func main() {
 
 	_, err := program.Run()
 	if err != nil {
-		panic(err)
+		panic(err.Error())
 	}
 }

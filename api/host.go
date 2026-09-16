@@ -16,8 +16,8 @@ type Host struct {
 	Network *Network
 }
 
-func (host *Host) Equal(other *Host) bool {
-	return other != nil && host.IP.Equal(other.IP)
+func (host *Host) Equal(other Host) bool {
+	return host.IP.Equal(other.IP)
 }
 
 func (host *Host) Root() *File {

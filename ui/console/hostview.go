@@ -4,7 +4,6 @@ import (
 	"io"
 	"netfs/api"
 	"netfs/ui/console/message"
-	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -13,17 +12,12 @@ import (
 )
 
 type ChangeActiveHostMsg struct {
-	Host  *api.Host
+	Host  api.Host
 	Alive bool
 }
 
-type UpdateHostsMsg struct {
-	Items []list.Item
-	Index int
-}
-
 type HostViewItem struct {
-	Host  *api.Host
+	Host  api.Host
 	Alive bool
 }
 
@@ -77,7 +71,7 @@ type HostView struct {
 }
 
 func (model HostView) Init() tea.Cmd {
-	return model.refreshHosts()
+	return nil
 }
 
 func (model HostView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -97,22 +91,24 @@ func (model HostView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case ChangeActiveViewMsg:
-		model.active = (msg.View == Host)
-	case UpdateHostsMsg:
-		selectedHost := model.selectedItem()
+	case message.RefreshStateMsg:
+		selected := model.selectedItem()
 
-		model.list.SetItems(msg.Items)
-		for index, item := range msg.Items {
-			hostItem := item.(*HostViewItem)
-			if selectedHost != nil && hostItem.Host.IP.Equal(selectedHost.IP) {
+		items := make([]list.Item, len(msg.Hosts))
+		for index := range msg.Hosts {
+			items[index] = &HostViewItem{Host: msg.Hosts[index].Host, Alive: msg.Hosts[index].Alive}
+		}
+		model.list.SetItems(items)
+
+		for index := range msg.Hosts {
+			if selected != nil && selected.Equal(msg.Hosts[index].Host) {
 				model.list.Select(index)
-				cmd = func() tea.Msg { return ChangeActiveHostMsg{Host: hostItem.Host, Alive: hostItem.Alive} }
 				break
 			}
 		}
-	case message.RefreshMsg:
-		cmd = model.refreshHosts()
+
+	case ChangeActiveViewMsg:
+		model.active = (msg.View == Host)
 	case message.ResizeMsg:
 		frameX, frameY := model.style.GetFrameSize()
 		width := msg.Width - frameX
@@ -143,35 +139,11 @@ func (model HostView) View() string {
 	return model.style.Render(model.list.View())
 }
 
-func (model HostView) refreshHosts() tea.Cmd {
-	return func() tea.Msg {
-		items := make([]list.Item, len(model.list.Items()))
-
-		hosts, err := model.network.Hosts()
-		if err == nil { // TODO. show error
-			for index, item := range model.list.Items() {
-				hostItem := item.(*HostViewItem)
-				items[index] = &HostViewItem{
-					Host:  hostItem.Host,
-					Alive: slices.ContainsFunc(hosts, func(host api.Host) bool { return hostItem.Host.Equal(&host) }),
-				}
-			}
-
-			for _, host := range hosts {
-				if !slices.ContainsFunc(items, func(item list.Item) bool { return item.(*HostViewItem).Host.Equal(&host) }) {
-					items = append(items, &HostViewItem{Host: &host, Alive: true})
-				}
-			}
-		}
-		return UpdateHostsMsg{Items: items}
-	}
-}
-
 func (model HostView) selectedItem() *api.Host {
 	item := model.list.SelectedItem()
 	if item != nil {
 		if hostItem, ok := item.(*HostViewItem); ok {
-			return hostItem.Host
+			return &hostItem.Host
 		}
 	}
 	return nil

@@ -4,6 +4,7 @@ import (
 	"netfs/api"
 	"netfs/ui/console/message"
 	"netfs/ui/console/modal"
+	"slices"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -34,12 +35,14 @@ type ChangeActiveViewMsg struct {
 
 // The main view of the UI.
 type ConsoleView struct {
-	hostsView  tea.Model
-	fileView   tea.Model
-	taskView   tea.Model
-	activeView ConsoleActiveView
-	style      lipgloss.Style
-	modalView  tea.Model
+	hostsView      tea.Model
+	fileView       tea.Model
+	taskView       tea.Model
+	activeView     ConsoleActiveView
+	style          lipgloss.Style
+	modalView      tea.Model
+	network        *api.Network
+	lastRefreshMsg *message.RefreshStateMsg
 }
 
 func (model ConsoleView) Init() tea.Cmd {
@@ -48,8 +51,9 @@ func (model ConsoleView) Init() tea.Cmd {
 		model.fileView.Init(),
 		model.taskView.Init(),
 		model.modalView.Init(),
+		model.refreshState(),
 		func() tea.Msg { return ChangeActiveViewMsg{View: Host} },
-		tea.Every(3*time.Second, func(t time.Time) tea.Msg { return message.RefreshMsg{} }), // TODO. 3*time.Second - from settings
+		tea.Every(3*time.Second, func(t time.Time) tea.Msg { return message.TriggerMsg{} }), // TODO. 3*time.Second - from settings
 	)
 }
 
@@ -62,12 +66,16 @@ func (model ConsoleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	modalView := model.modalView.(*modal.ModalGroupView)
 	switch msg := msg.(type) {
-	case message.RefreshMsg:
-		cmd = tea.Every(3*time.Second, func(t time.Time) tea.Msg { return message.RefreshMsg{} }) // TODO. 3*time.Second - from settings
+	case message.TriggerMsg:
+		cmd = tea.Sequence(
+			tea.Every(3*time.Second, func(t time.Time) tea.Msg { return message.TriggerMsg{} }), // TODO. 3*time.Second - from settings
+			model.refreshState(),
+		)
+	case message.RefreshStateMsg:
+		model.lastRefreshMsg = &msg
 		model.hostsView, hostViewCmd = model.hostsView.Update(msg)
 		model.fileView, fileViewCmd = model.fileView.Update(msg)
 		model.taskView, taskViewCmd = model.taskView.Update(msg)
-
 	case tea.KeyMsg:
 		// Quit
 		if msg.String() == QuitKeyMsg {
@@ -173,6 +181,26 @@ func (model ConsoleView) View() string {
 	)
 }
 
+func (model ConsoleView) refreshState() tea.Cmd {
+	return func() tea.Msg {
+		items := model.lastRefreshMsg.Hosts
+
+		hosts, err := model.network.Hosts()
+		if err == nil { // TODO. show error
+			for index := range items {
+				items[index].Alive = slices.ContainsFunc(hosts, items[index].Host.Equal)
+			}
+
+			for _, host := range hosts {
+				if !slices.ContainsFunc(items, func(item message.RefreshedHost) bool { return item.Host.Equal(host) }) {
+					items = append(items, message.RefreshedHost{Host: host, Alive: true})
+				}
+			}
+		}
+		return message.RefreshStateMsg{Hosts: items}
+	}
+}
+
 // The function returns new instance of ConsoleView.
 func NewConsoleViewModel(network *api.Network) tea.Model {
 	style := lipgloss.
@@ -180,10 +208,12 @@ func NewConsoleViewModel(network *api.Network) tea.Model {
 		Align(lipgloss.Left, lipgloss.Left)
 
 	return ConsoleView{
-		style:     style,
-		hostsView: NewHostView(network),
-		fileView:  NewFileView(network),
-		taskView:  NewTaskView(network),
+		style:          style,
+		network:        network,
+		lastRefreshMsg: &message.RefreshStateMsg{Hosts: []message.RefreshedHost{}},
+		hostsView:      NewHostView(network),
+		fileView:       NewFileView(network),
+		taskView:       NewTaskView(network),
 		modalView: modal.NewModalGroupView(
 			modal.ModalGroupViewItem{Name: modal.ConfirmModal, Modal: modal.NewConfirmModalView()},
 			modal.ModalGroupViewItem{Name: modal.TextInputModal, Modal: modal.NewTextInputModalView(modal.TextInputModal)},

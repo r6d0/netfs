@@ -98,10 +98,10 @@ func (FileViewItemDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 type FileView struct {
 	list     list.Model
 	style    lipgloss.Style
+	host     api.Host
 	id       string
 	delegate *FileViewItemDelegate
 	prev     *FileViewHistoryNode
-	host     *api.Host
 	network  *api.Network
 	toCopy   *api.File
 	toMove   *api.File
@@ -218,14 +218,22 @@ func (model FileView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+	case message.RefreshStateMsg:
+		for index := range msg.Hosts {
+			if model.host.Equal(msg.Hosts[index].Host) {
+				model.host = msg.Hosts[index].Host
+				model.alive = msg.Hosts[index].Alive
+				model.delegate.alive = msg.Hosts[index].Alive
+				break
+			}
+		}
+		cmd = func() tea.Msg { return UpdateFilesMsg{Items: model.list.Items()} }
 	case ChangeActiveHostMsg:
 		if !msg.Host.Equal(model.host) {
+			model.host = msg.Host
 			model.prev = &FileViewHistoryNode{}
 			cmd = model.resolveFileChildren(msg.Host.Root())
 		}
-		model.host = msg.Host
-		model.alive = msg.Alive
-		model.delegate.alive = msg.Alive
 	case UpdateFilesMsg:
 		selectedFile := model.selectedItem()
 
@@ -427,7 +435,7 @@ func (model FileView) copyFile(replace bool) tea.Cmd {
 		file := model.toCopy
 		path := filepath.Join(item.File.Info.Path, file.Info.Name)
 		target := api.File{
-			Host: model.host,
+			Host: &model.host,
 			Info: api.FileInfo{
 				Id:   api.FileId(path),
 				Name: file.Info.Name,
@@ -468,7 +476,7 @@ func (model FileView) moveFile(file *api.File, replace bool) tea.Cmd {
 		item := model.prev.Item.(*FileViewItem)
 		path := filepath.Join(item.File.Info.Path, file.Info.Name)
 		target := api.File{
-			Host: model.host,
+			Host: &model.host,
 			Info: api.FileInfo{
 				Id:   api.FileId(path),
 				Name: file.Info.Name,
@@ -526,7 +534,7 @@ func (model FileView) createFile(msg tea.Msg, fileType api.FileType) tea.Cmd {
 			item := model.prev.Item.(*FileViewItem)
 			path := filepath.Join(item.File.Info.Path, payload.Value)
 			target := api.File{
-				Host: model.host,
+				Host: &model.host,
 				Info: api.FileInfo{
 					Id:   api.FileId(path),
 					Name: payload.Value,
@@ -582,13 +590,14 @@ func (model FileView) checkFileExistsInList(name string) (bool, string) {
 }
 
 func NewFileView(network *api.Network) tea.Model {
-	view := &FileView{id: "FileView", network: network}
+	view := &FileView{id: "FileView", network: network, alive: true}
 	view.delegate = &FileViewItemDelegate{
 		columnTypeStyle:   lipgloss.NewStyle().AlignHorizontal(lipgloss.Left),
 		columnNameStyle:   lipgloss.NewStyle().AlignHorizontal(lipgloss.Left),
 		columnSizeStyle:   lipgloss.NewStyle().AlignHorizontal(lipgloss.Right),
 		itemStyle:         lipgloss.NewStyle(),
 		itemSelectedStyle: lipgloss.NewStyle().Background(lipgloss.Color("#3b82f6")),
+		alive:             true,
 	}
 
 	lst := list.New([]list.Item{}, view.delegate, 0, 0)

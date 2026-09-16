@@ -1,10 +1,19 @@
 package message
 
-// An event sent after changing of the terminal size.
+import "netfs/api"
+
 type ResizeMsg struct {
 	Width  int
 	Height int
 }
 
-// An event is sent every N seconds.
-type RefreshMsg struct{}
+type TriggerMsg struct{}
+
+type RefreshedHost struct {
+	Host  api.Host
+	Alive bool
+}
+
+type RefreshStateMsg struct {
+	Hosts []RefreshedHost
+}

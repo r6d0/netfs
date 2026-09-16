@@ -1,6 +1,7 @@
 package console
 
 import (
+	"fmt"
 	"io"
 	"netfs/api"
 	"netfs/ui/console/message"
@@ -90,7 +91,6 @@ func (TaskViewItemDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 type TaskView struct {
 	list     list.Model
 	style    lipgloss.Style
-	host     *api.Host
 	network  *api.Network
 	delegate *TaskViewItemDelegate
 }
@@ -104,10 +104,10 @@ func (model TaskView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var listCmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case ChangeActiveHostMsg:
-		model.host = msg.Host
-		cmd = model.resolveTasks()
+	case message.RefreshStateMsg:
+		cmd = model.resolveTasks(msg.Hosts)
 	case UpdateTaskMsg:
+		Log("./log.txt", fmt.Sprintf("%v\n", msg.Items))
 		cmd = model.list.SetItems(msg.Items)
 	case ChangeActiveViewMsg:
 		if msg.View == Task {
@@ -116,10 +116,6 @@ func (model TaskView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			model.delegate.isActive = false
 			model.style = model.style.BorderForeground(lipgloss.Color("#ffffff"))
-		}
-	case message.RefreshMsg:
-		if model.host != nil {
-			cmd = model.resolveTasks()
 		}
 	case message.ResizeMsg:
 		frameX, frameY := model.style.GetFrameSize()
@@ -145,19 +141,31 @@ func (model TaskView) View() string {
 	return model.style.Render(model.list.View())
 }
 
-func (model TaskView) resolveTasks() tea.Cmd {
+func (model TaskView) resolveTasks(hosts []message.RefreshedHost) tea.Cmd {
 	return func() tea.Msg {
-		// TODO. show error
-		tasks, err := model.host.Tasks()
-		if err == nil {
-			items := make([]list.Item, len(tasks))
-			for index := range items {
-				items[index] = &TaskViewItem{Task: &tasks[index]}
-			}
-			return UpdateTaskMsg{Items: items}
+		taskChan := make(chan []list.Item)
+
+		for index := range hosts {
+			go func(host api.Host) {
+				// TODO. show error
+				tasks, err := host.Tasks()
+				if err == nil {
+					items := make([]list.Item, len(tasks))
+					for index := range items {
+						items[index] = &TaskViewItem{Task: &tasks[index]}
+					}
+					taskChan <- items
+				}
+
+				taskChan <- []list.Item{}
+			}(hosts[index].Host)
 		}
 
-		return UpdateTaskMsg{Items: []list.Item{}}
+		result := []list.Item{}
+		for range hosts {
+			result = append(result, <-taskChan...)
+		}
+		return UpdateTaskMsg{Items: result}
 	}
 }
 
